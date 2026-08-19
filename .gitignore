@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.idea/
+.serena/
+*.log
+.venv/
+*.db
+graph-viz.html
+graph.json
+*.egg-info/
+build/
+*.db-shm
+*.db-wal
+dist/

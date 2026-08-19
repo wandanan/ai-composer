@@ -1,0 +1,14 @@
+# ai-composer 依赖（kit/ 与 biz/ 为仓库内代码, 无需安装）
+# 核心: 无第三方依赖（内核 ~230 行纯标准库）
+# 参考应用与引擎:
+fastapi>=0.110
+uvicorn>=0.27
+celery>=5.3
+redis>=4.5
+python-docx>=1.1
+pydantic>=2.0
+# review 应用（DB + 文档提取 + 文件上传; sqlite 默认, MySQL 需 pymysql）
+sqlalchemy>=2.0
+pymysql>=1.0
+pymupdf>=1.24
+python-multipart>=0.0.9

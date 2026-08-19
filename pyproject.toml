@@ -1,0 +1,47 @@
+# ai-composer 0.1.0 — AI 应用开发范式（应用 = 平台内核 + 业务插件组合）
+# 安装后获得 aic 命令: init/graph/promote/uninstall/template
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-composer"
+version = "0.1.0"
+description = "AI 应用开发范式: 应用 = 平台内核 + 业务插件组合"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "celery>=5.3",
+    "redis>=4.5",
+    "python-docx>=1.1",
+    "pydantic>=2.0",
+    "sqlalchemy>=2.0",
+    "pymysql>=1.0",
+    "pymupdf>=1.24",
+    "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+aic = "tools.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kernel*", "extensions*", "tools*", "apps*"]
+
+[tool.setuptools.package-data]
+"tools" = ["assets/*.js"]
+"apps" = ["*/config/*.ini"]
+
+# 非包数据: docs/learn（template 提取用）+ requirements.txt（template 生成依赖用）
+[tool.setuptools.data-files]
+"docs/learn" = [
+    "docs/learn/foundation.md",
+    "docs/learn/session-artifact-concept.md",
+    "docs/learn/tool-closed-loop.md",
+    "docs/learn/tutorial-build-app.md",
+]
+"." = ["requirements.txt"]
