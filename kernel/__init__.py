@@ -17,7 +17,7 @@ from .kernel import (
 from .layout import check_shell_content, check_shell_layout
 from .plugin import Plugin
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 __all__ = [
     "Context",
