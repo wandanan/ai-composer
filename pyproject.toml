@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-composer"
-version = "0.1.3"
+version = "0.1.4"
 description = "AI 应用开发范式: 应用 = 平台内核 + 业务插件组合"
 readme = "README.md"
 requires-python = ">=3.11"
