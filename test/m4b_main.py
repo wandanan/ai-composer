@@ -181,6 +181,13 @@ def main() -> int:
           getattr(loop, "_model", "") == "test-model")
     check("FakeLoop 仍是 AgentLoop 协议", isinstance(FakeLoop(), AgentLoop))
 
+    print("\n[10] SessionPlugin runtime_dir 注入（多机部署统一会话目录）")
+    from extensions.platform.session import SessionPlugin
+    sd = os.path.join(tempfile.mkdtemp(prefix="m4b_sess_"), "sessions")
+    sess_ctx = Context()
+    boot(sess_ctx, [SessionPlugin(runtime_dir=sd)])
+    check("runtime_dir 注入生效", sess_ctx.get("sessions").runtime_dir == sd)
+
     print("\n" + "=" * 64)
     failed = _PASS.count(False)
     if failed == 0:

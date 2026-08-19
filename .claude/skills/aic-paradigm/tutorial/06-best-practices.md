@@ -89,7 +89,7 @@ ctx.register("storage", MinioStorage())    # 之前是 FileStorage()
 cache      MemoryCache（默认） → 多进程必须换 RedisCache（锁/运行态各自进程内存不共享）
 jobs       ThreadJobQueue（默认）→ 多进程必须换 CeleryJobQueue（需 Redis broker 可用）
 storage    LocalStorage（默认）→ 多进程共享依赖同一磁盘路径; 多机必须换共享存储实现
-sessions   会话工作区在临时目录（跨进程 attach 靠目录存在恢复）→ 多机部署需统一存储目录
+sessions   `SessionPlugin(runtime_dir=...)` 指定共享目录（默认临时目录; 跨进程 attach 靠目录存在恢复）→ 多机部署必须统一目录
 ```
 
 构造注入即可替换（`CachePlugin(impl=RedisCache())`、`JobsPlugin(impl=CeleryJobQueue(...))`），消费方零改动。

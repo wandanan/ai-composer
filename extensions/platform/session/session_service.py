@@ -73,9 +73,16 @@ class SessionService:
 
 
 class SessionPlugin(Plugin):
-    """会话服务插件：提供 ctx.sessions。"""
+    """会话服务插件：提供 ctx.sessions。
+
+    runtime_dir: 会话工作区根目录（默认系统临时目录 kit_sessions）。
+    多进程/多机部署传共享目录——跨进程 attach 靠目录存在恢复（见 06 部署前检查清单）。
+    """
 
     provides = ["sessions"]
 
+    def __init__(self, runtime_dir: str | None = None):
+        self._runtime_dir = runtime_dir
+
     def apply(self, ctx: Context):
-        ctx.register("sessions", SessionService())
+        ctx.register("sessions", SessionService(self._runtime_dir))

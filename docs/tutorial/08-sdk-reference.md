@@ -93,7 +93,7 @@ AgentLoop        run_conversation(user_message, conversation_history=None, **kw)
 | cache | `CachePlugin(impl=None)` | `set(key, value, ttl=None)` / `get(key) -> str\|None` / `set_nx(key, value, ttl=None) -> bool`（原子锁）/ `delete(key)`；MemoryCache（默认）/ RedisCache（多进程必须） |
 | jobs | `JobsPlugin(impl=None, app_pkg="<应用名>")` | `register_task(name, fn)` / `enqueue(task_name, args=None, queue="default") -> task_id` / `result(task_id, timeout=None)` / `health() -> bool`；Thread/Celery/Failover 队列；**app_pkg 触发任务名协议校验** |
 | db | `DbPlugin(url=None)` | `engine` / `session()`（SQLAlchemy Session）/ `create_all(base)`；模块函数 `database_url() -> str` |
-| sessions | `SessionPlugin()` | `create_session(meta=None) -> Session` / `get(session_id)` / `attach(session_id, meta=None)`（跨进程重建）/ `start_turn(session) -> int`；Session 字段：`session_id` / `dir`（工作区）/ `meta` / `turn` |
+| sessions | `SessionPlugin(runtime_dir=None)` | `create_session(meta=None) -> Session` / `get(session_id)` / `attach(session_id, meta=None)`（跨进程重建）/ `start_turn(session) -> int`；Session 字段：`session_id` / `dir`（工作区）/ `meta` / `turn`；多机部署 `runtime_dir` 传共享目录 |
 | renderers | `RenderPlugin()` | `register(renderer)` / `get(name)` / `has(name)` / `names()`；渲染器协议：`name` + `render(session, *, merged, outline, version, **kw) -> 输出文件名` |
 | stream | `StreamPlugin(redis_url=None)` | `subscribe(session_id) -> (实时队列, 事件快照)` / `unsubscribe(session_id, q)` / `publish(session_id, event, data)`；`redis_enabled`（跨进程走 Redis pub/sub） |
 | sandbox | `SandboxPlugin()` | `set_workspace/get_workspace/clear_workspace` / `lock_dir_readonly(path)` / `unlock_dir(path)` / `sanitize_filename(filename, max_length=200)` |
@@ -121,6 +121,9 @@ next_draft_version(session_dir, kind="merged", prefix="draft_v", suffix=".md") -
 ```
 
 ## 5. 应用壳标准模式（profile / shell / main）
+
+> **标准壳以 `aic init` 最新生成骨架为准**——存量应用升级时对照本节同步
+> （尤其 shell.py 的引擎决策块），避免"能跑但不标准"的碎片化。
 
 ### profile.py — 插件清单（组装点）
 
