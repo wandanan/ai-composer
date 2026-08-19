@@ -101,7 +101,8 @@ shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_a
 
 | 想做什么 | 教程文件 |
 |---|---|
-| API 全貌 + 最小插件完整示例（可整段照抄） | `tutorial/03-first-plugin.md` |
+| **API 速查（签名/服务表/最小插件，开发时查这个）** | `tutorial/08-sdk-reference.md` |
+| 最小插件完整示例（可整段照抄） | `tutorial/03-first-plugin.md` |
 | 壳与装配（profile/shell/main/tasks/worker 代码） | `tutorial/04-app-shell.md` |
 | 安装与 3 步快速开始 | `tutorial/01-installation.md` / `02-quickstart.md` |
 | 工具链流程（装/看/升/卸/模板） | `tutorial/05-tools.md` / `07-command-reference.md` |
