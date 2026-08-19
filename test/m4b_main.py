@@ -156,6 +156,15 @@ def main() -> int:
     good.get("todo/abc123/meta")
     check("合规 key（/ 分层）可读写", good.exists("todo/abc123/meta"))
 
+    print("\n[8] extract 失败区分（大声失败, 不静默返回空串）")
+    from extensions.platform.extract import extract_document
+    try:
+        extract_document(b"x", "a.xyz")
+        check("不支持类型 → 抛 ValueError", False)
+    except ValueError:
+        check("不支持类型 → 抛 ValueError", True)
+    check("txt 正常提取", extract_document("你好".encode("utf-8"), "a.txt") == "你好")
+
     print("\n" + "=" * 64)
     failed = _PASS.count(False)
     if failed == 0:

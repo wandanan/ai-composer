@@ -66,6 +66,9 @@ aic --help
   template   新应用开发模板提取（只带走公共插件 + 示例壳 hello_aic）
 ```
 
+> **Windows 提示**：终端输出中文乱码时（GBK 控制台），命令前加
+> `PYTHONIOENCODING=utf-8`（如 `PYTHONIOENCODING=utf-8 aic init my_app`）——仅显示问题，不影响功能。
+
 ## 安装后获得什么
 
 ```

@@ -22,7 +22,11 @@ ALLOWED_TYPES = {".docx": "docx", ".doc": "docx", ".pdf": "pdf",
 
 def extract_document(content: bytes, filename: str, use_ocr: bool = False,
                      progress_callback=None, engine: str = "local") -> str:
-    """从文件字节提取文本（Word 自动转 PDF; 引擎 local/mineru, 对齐原项目）。"""
+    """从文件字节提取文本（Word 自动转 PDF; 引擎 local/mineru）。
+
+    大声失败原则: 不支持的类型/缺依赖/转换失败 → 抛异常（调用方自行 catch）;
+    仅"文档本身为空"返回 ""。不要把"提取失败"和"内容为空"混为一谈。
+    """
     if progress_callback:
         try:
             progress_callback({"stage": "preprocess", "message": "开始提取"})
@@ -35,8 +39,10 @@ def extract_document(content: bytes, filename: str, use_ocr: bool = False,
         try:
             pdf = convert_to_pdf(content, filename)
         except Exception as e:
-            logger.warning(f"[review] Word→PDF 失败 {filename}: {e}, 回退 python-docx")
-            return _extract_docx(content) if ext == ".docx" else ""
+            logger.warning(f"[extract] Word→PDF 失败 {filename}: {e}, 回退 python-docx")
+            if ext == ".docx":
+                return _extract_docx(content)
+            raise RuntimeError(f"[extract] .doc 转 PDF 失败: {e}") from e
         if engine == "mineru":
             return _extract_mineru(pdf, filename, progress_callback)
         return _extract_pdf(pdf)
@@ -46,8 +52,7 @@ def extract_document(content: bytes, filename: str, use_ocr: bool = False,
         return _extract_pdf(content)
     if ext in (".txt", ".md"):
         return content.decode("utf-8", errors="replace")
-    logger.warning(f"[review] 不支持的文件类型: {ext} ({filename})")
-    return ""
+    raise ValueError(f"[extract] 不支持的文件类型: {ext} ({filename})")
 
 
 def _extract_mineru(content: bytes, filename: str, progress_callback=None) -> str:
@@ -64,9 +69,12 @@ def _extract_mineru(content: bytes, filename: str, progress_callback=None) -> st
 
 
 def _extract_docx(content: bytes) -> str:
-    """python-docx 提取段落 + 表格文本。"""
+    """python-docx 提取段落 + 表格文本（缺依赖/解析失败 → RuntimeError）。"""
     try:
         import docx
+    except ImportError:
+        raise RuntimeError("[extract] python-docx 未安装, 无法提取 docx") from None
+    try:
         doc = docx.Document(io.BytesIO(content))
         parts: list[str] = [p.text for p in doc.paragraphs if p.text.strip()]
         for table in doc.tables:
@@ -75,31 +83,26 @@ def _extract_docx(content: bytes) -> str:
                 if any(cells):
                     parts.append(" | ".join(cells))
         text = "\n".join(parts)
-        logger.info(f"[review] docx 提取: {len(text)} 字符")
+        logger.info(f"[extract] docx 提取: {len(text)} 字符")
         return text
-    except ImportError:
-        logger.warning("[review] python-docx 未安装, docx 提取不可用")
-        return ""
     except Exception as e:
-        logger.warning(f"[review] docx 提取失败: {e}")
-        return ""
+        raise RuntimeError(f"[extract] docx 提取失败: {e}") from e
 
 
 def _extract_pdf(content: bytes) -> str:
-    """pymupdf 逐页提取文本。"""
+    """pymupdf 逐页提取文本（缺依赖/解析失败 → RuntimeError）。"""
     try:
         import fitz
+    except ImportError:
+        raise RuntimeError("[extract] pymupdf 未安装, 无法提取 pdf") from None
+    try:
         doc = fitz.open(stream=content, filetype="pdf")
         parts = [page.get_text() for page in doc]
         text = "\n".join(parts)
-        logger.info(f"[review] pdf 提取: {len(text)} 字符 / {len(doc)} 页")
+        logger.info(f"[extract] pdf 提取: {len(text)} 字符 / {len(doc)} 页")
         return text
-    except ImportError:
-        logger.warning("[review] pymupdf 未安装, pdf 提取不可用")
-        return ""
     except Exception as e:
-        logger.warning(f"[review] pdf 提取失败: {e}")
-        return ""
+        raise RuntimeError(f"[extract] pdf 提取失败: {e}") from e
 
 
 @runtime_checkable

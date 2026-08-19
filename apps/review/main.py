@@ -105,7 +105,11 @@ async def upload_file(files: list[UploadFile]):
                 detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
         key = f"review/file/{fid}/{name}"
         SHELL.get("storage").put(key, content)
-        text = SHELL.get("extract").extract(content, name)
+        try:
+            text = SHELL.get("extract").extract(content, name)
+        except (ValueError, RuntimeError) as e:
+            # 提取失败大声失败（不静默存空串）; 上传端点转 400 明确提示
+            raise HTTPException(status_code=400, detail=str(e)) from e
         with SHELL.get("db").session() as s:
             s.add(ReviewFile(
                 id=fid, original_name=name, file_type=suffix,

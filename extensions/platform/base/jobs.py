@@ -2,7 +2,7 @@
 
 ctx.jobs: 任务队列协议（enqueue/result/health）。
 - ThreadJobQueue:   线程池实现（验证/降级路径）——对应现有 _dispatch_background
-- CeleryJobQueue:   Celery 适配器（协议合规 stub, 真实 broker 在 strangler 阶段接入）
+- CeleryJobQueue:   Celery 适配器（真实实现: send_task 提交 + AsyncResult 取结果, broker 前置探测）
 - FailoverJobQueue: 主队列不可用 → 备用队列（降级矩阵的插件表达）
 对应 app/tasks/（celery_app + 降级线程池）的插件化。
 """

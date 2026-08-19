@@ -81,7 +81,20 @@ ctx.register("storage", MinioStorage())    # 之前是 FileStorage()
 这些由机制强制（违反装配即报错），不是靠评审自觉——"大声失败"让问题在装配时暴露，
 而不是冷路径才炸。
 
-## 6. 诚实的边界（0.1 版本验证基线）
+## 6. 部署前检查清单（多进程）
+
+默认装配是**单进程兜底**（内存/本地实现），多进程部署（API + Celery worker）前逐项核对：
+
+```
+cache      MemoryCache（默认） → 多进程必须换 RedisCache（锁/运行态各自进程内存不共享）
+jobs       ThreadJobQueue（默认）→ 多进程必须换 CeleryJobQueue（需 Redis broker 可用）
+storage    LocalStorage（默认）→ 多进程共享依赖同一磁盘路径; 多机必须换共享存储实现
+sessions   会话工作区在临时目录（跨进程 attach 靠目录存在恢复）→ 多机部署需统一存储目录
+```
+
+构造注入即可替换（`CachePlugin(impl=RedisCache())`、`JobsPlugin(impl=CeleryJobQueue(...))`），消费方零改动。
+
+## 7. 诚实的边界（0.1 版本验证基线）
 
 ```
 已验证:  内核机制（m0~m5 全绿）/ 壳契约与任务名协议（m6）/
