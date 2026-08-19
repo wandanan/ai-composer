@@ -94,7 +94,7 @@ AgentLoop        run_conversation(user_message, conversation_history=None, **kw)
 | stream | `StreamPlugin(redis_url=None)` | `subscribe(session_id) -> (实时队列, 事件快照)` / `unsubscribe(session_id, q)` / `publish(session_id, event, data)`；`redis_enabled`（跨进程走 Redis pub/sub） |
 | sandbox | `SandboxPlugin()` | `set_workspace/get_workspace/clear_workspace` / `lock_dir_readonly(path)` / `unlock_dir(path)` / `sanitize_filename(filename, max_length=200)` |
 | extract | `ExtractPlugin(impl=None)` | `extract(content, filename, use_ocr=False, progress_callback=None, **kw) -> str`；模块函数 `extract_document(...)`；LocalExtractor 支持 docx/pdf/MinerU |
-| agentLoop | `FakeLoop(name, replies, delay)` / `HermesEnginePlugin()` | AgentLoop 协议（见 §2） |
+| agentLoop | `FakeLoop(name, replies, delay)`（默认） | AgentLoop 协议（见 §2）；真实引擎 = 自挂引擎插件覆盖 |
 
 **事件契约**：事件名由业务自定义；payload 必须携带 `session_id`（stream 依赖它路由推送）。
 
@@ -138,12 +138,10 @@ def build_shell() -> Context:
     shell = Context()
     shell.register("config", load_config())
 
-    # 引擎是部署决策: KIT_ENGINE=hermes 用真实引擎; 默认 fake（免 API 成本）
-    if os.environ.get("KIT_ENGINE", "fake") == "hermes":
-        plugins = PLUGINS + [HermesEnginePlugin()]
-    else:
-        shell.register("agentLoop", FakeLoop(name="my_app-fake"))
-        plugins = PLUGINS
+    # 引擎是部署决策: 默认 fake（免 API 成本, 确定性）。
+    # 真实引擎 = profile.py 的 PLUGINS 挂载引擎插件（提供 "agentLoop" 即覆盖 fake）。
+    shell.register("agentLoop", FakeLoop(name="my_app-fake"))
+    plugins = PLUGINS
 
     mounts = boot(shell, plugins)     # 自动装配: 依赖顺序不用管
     return shell

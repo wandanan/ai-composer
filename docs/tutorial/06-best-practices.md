@@ -86,7 +86,7 @@ ctx.register("storage", MinioStorage())    # 之前是 FileStorage()
 ```
 已验证:  内核机制（m0~m5 全绿）/ 壳契约与任务名协议（m6）/
          工具链（m7）/ 工具闭环（真实跑通）
-验证基线: fake 引擎全链路（KIT_ENGINE 默认）——真实 LLM 引擎端到端
+验证基线: fake 引擎全链路（默认）——真实 LLM 引擎端到端
          是 0.2 的迭代项
 不承诺:  真实引擎/MinerU/MySQL 的端到端（插件已就位, 待真实环境验证）
 ```

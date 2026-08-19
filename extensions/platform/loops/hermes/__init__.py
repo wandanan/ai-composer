@@ -1,4 +1,7 @@
-"""kit/loops/hermes_loop.py — Hermes 引擎适配器（M1b）。
+"""extensions/platform/loops/hermes/ — Hermes 引擎适配器（真实引擎插件）。
+
+不进发布包（pyproject 排除）: 平台不绑定任何真实引擎。要用真实引擎时,
+把它作为普通插件挂到应用 profile.py 的 PLUGINS（提供 "agentLoop" 即覆盖 fake）。
 
 实现 AgentLoop 协议，包装 run_agent.AIAgent。
 

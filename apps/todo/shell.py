@@ -27,14 +27,11 @@ def build_shell() -> Context:
     shell = Context()
     shell.register("config", load_config())
 
-    # 引擎是部署决策: KIT_ENGINE=hermes 用真实引擎; 默认 fake（免 API 成本）
-    if os.environ.get("KIT_ENGINE", "fake") == "hermes":
-        from extensions.platform.loops import HermesEnginePlugin
-        plugins = PLUGINS + [HermesEnginePlugin()]
-    else:
-        from extensions.platform.loops import FakeLoop
-        shell.register("agentLoop", FakeLoop(name="todo-fake"))
-        plugins = PLUGINS
+    # 引擎是部署决策: 默认 fake（免 API 成本, 确定性）。
+    # 真实引擎 = profile.py 的 PLUGINS 挂载引擎插件（提供 "agentLoop" 即覆盖 fake）。
+    from extensions.platform.loops import FakeLoop
+    shell.register("agentLoop", FakeLoop(name="todo-fake"))
+    plugins = PLUGINS
 
     mounts = boot(shell, plugins)
     shell._mounts = mounts  # health 端点展示用

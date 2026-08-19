@@ -25,7 +25,7 @@ HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 sys.path.insert(0, HERMES_AGENT_SRC)  # biz 改名后无 plugins 遮蔽冲突, 可提前注入
 
 from kernel import Context, ServiceNotFound, boot
-from extensions.platform.loops import HermesEnginePlugin
+from extensions.platform.loops.hermes import HermesEnginePlugin
 from extensions.platform.security.sandbox import SandboxPlugin
 
 _PASS: list[bool] = []

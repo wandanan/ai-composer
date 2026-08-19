@@ -27,7 +27,8 @@ from docx import Document as DocxDocument
 from docx.shared import RGBColor
 
 from kernel import Context, boot
-from extensions.platform.loops import FakeLoop, HermesLoop
+from extensions.platform.loops import FakeLoop
+from extensions.platform.loops.hermes import HermesLoop
 from extensions.platform.render import ArtifactRenderer, RenderPlugin
 from extensions.platform.session import SessionPlugin
 from extensions.platform.session.artifacts import list_artifacts, read_artifact

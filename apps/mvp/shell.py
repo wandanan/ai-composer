@@ -42,12 +42,10 @@ def build_shell(config_path: str | None = None) -> tuple[Context, list]:
     shell = Context()
     shell.register("config", load_config(config_path))
 
-    if os.environ.get("KIT_ENGINE", "fake") == "hermes":
-        from extensions.platform.loops import HermesEnginePlugin
-        plugins = PLUGINS + [HermesEnginePlugin()]
-    else:
-        shell.register("agentLoop", FakeLoop(name="mvp-fake", replies=FAKE_REPLIES))
-        plugins = PLUGINS
+    # 引擎是部署决策: 默认 fake（免 API 成本）; 真实引擎 = profile.py 挂载引擎插件
+    # （提供 "agentLoop" 即覆盖 fake）
+    shell.register("agentLoop", FakeLoop(name="mvp-fake", replies=FAKE_REPLIES))
+    plugins = PLUGINS
 
     mounts = boot(shell, plugins)
     return shell, mounts

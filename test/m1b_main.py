@@ -26,7 +26,8 @@ import sys
 HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 
 from kernel import Context, EventMode, boot
-from extensions.platform.loops import FakeLoop, HermesEnginePlugin, HermesLoop
+from extensions.platform.loops import FakeLoop
+from extensions.platform.loops.hermes import HermesEnginePlugin, HermesLoop
 from kernel.protocols import AgentLoop
 from extensions.platform.session import SessionPlugin
 from extensions.platform.render import RenderPlugin

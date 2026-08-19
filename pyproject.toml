@@ -31,8 +31,12 @@ aic = "tools.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["kernel*", "extensions*", "tools*", "apps*"]
-# 内部应用不进发布包
-exclude = ["apps.review*", "extensions.business.review*"]
+# 内部应用 + 真实引擎适配器不进发布包（平台不绑定任何引擎）
+exclude = [
+    "apps.review*",
+    "extensions.business.review*",
+    "extensions.platform.loops.hermes*",
+]
 
 [tool.setuptools.package-data]
 "tools" = ["assets/*.js"]

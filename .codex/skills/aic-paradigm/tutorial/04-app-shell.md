@@ -46,12 +46,10 @@ def build_shell() -> Context:
     shell = Context()
     shell.register("config", load_config())
 
-    # 引擎是部署决策: KIT_ENGINE=hermes 用真实引擎; 默认 fake（免 API 成本）
-    if os.environ.get("KIT_ENGINE", "fake") == "hermes":
-        plugins = PLUGINS + [HermesEnginePlugin()]
-    else:
-        shell.register("agentLoop", FakeLoop(name="my_app-fake"))
-        plugins = PLUGINS
+    # 引擎是部署决策: 默认 fake（免 API 成本, 确定性）。
+    # 真实引擎 = profile.py 的 PLUGINS 挂载引擎插件（提供 "agentLoop" 即覆盖 fake）。
+    shell.register("agentLoop", FakeLoop(name="my_app-fake"))
+    plugins = PLUGINS
 
     mounts = boot(shell, plugins)    # 自动装配: 依赖顺序不用管
     return shell
@@ -59,7 +57,7 @@ def build_shell() -> Context:
 
 要点：
 
-- **引擎是部署决策**——同一份代码，环境变量切换引擎（开发用 fake 免 API 成本，生产用 hermes）
+- **引擎是部署决策**——默认 fake 免 API 成本；生产用真实引擎 = 在 profile.py 挂载引擎插件（提供 `agentLoop` 即覆盖 fake），平台不绑定任何引擎
 - **boot 自动装配**——按 `inject`/`provides` 拓扑排序，乱序传入也能排对，依赖环直接拒绝
 
 ## main.py：HTTP 入口

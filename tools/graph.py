@@ -2,7 +2,7 @@
 
 数据来自声明式元数据（AST 静态扫描, 不运行任何装配）:
   - apps/<app>/profile.py 的 PLUGINS 列表      → 应用挂载哪些插件
-  - apps/<app>/shell.py 的条件追加             → 动态插件（如 KIT_ENGINE=hermes）
+  - apps/<app>/shell.py 的条件追加             → 动态插件（壳按环境变量挂载）
   - extensions/**/ 的 Plugin 子类 inject/provides → 插件依赖/提供哪些协议 key
 
 图模型（key 是中间节点, 依赖语义精确可读）:
