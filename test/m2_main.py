@@ -27,6 +27,7 @@ from extensions.platform.loops import FakeLoop, HermesLoop
 from extensions.platform.security.sandbox import SandboxPlugin
 from extensions.platform.session import SessionPlugin
 from extensions.platform.session.artifacts import list_artifacts
+from extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.pipeline import WriterPipeline
 from extensions.business.writer.task import OUTLINE_REPLY
@@ -74,11 +75,12 @@ def main() -> int:
     app = Context()
     fake = FakeLoop(name="fake-m2", replies=FAKE_REPLIES, delay=0.05)  # 模拟耗时使并发可观测
     app.register("agentLoop", fake)
-    mounts = boot(app, [SandboxPlugin(), SessionPlugin(), WriterPlugin()])
+    mounts = boot(app, [RenderPlugin(), SandboxPlugin(), SessionPlugin(), WriterPlugin()])
     order = [m.plugin.__class__.__name__ for m in mounts]
     print(f"\n[1] 装配: {order}")
     check("inject 推导: 沙箱/会话先于 WriterPlugin 挂载",
-          order == ["SandboxPlugin", "SessionPlugin", "WriterPlugin"], str(order))
+          order == ["RenderPlugin", "SandboxPlugin", "SessionPlugin", "WriterPlugin"],
+          str(order))
 
     sessions = app.get("sessions")
     session = sessions.create_session({"project": "跨江特大桥挂篮施工方案"})

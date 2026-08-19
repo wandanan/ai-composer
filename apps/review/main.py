@@ -103,7 +103,7 @@ async def upload_file(files: list[UploadFile]):
             raise HTTPException(
                 status_code=400,
                 detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)")
-        key = f"review:file:{fid}:{name}"
+        key = f"review/file/{fid}/{name}"
         SHELL.get("storage").put(key, content)
         text = SHELL.get("extract").extract(content, name)
         with SHELL.get("db").session() as s:

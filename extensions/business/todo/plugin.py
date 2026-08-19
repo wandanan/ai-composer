@@ -20,7 +20,7 @@ class TodoService:
         self.ctx = ctx
 
     def _key(self, session_id: str) -> str:
-        return f"todo:{session_id}"
+        return f"todo/{session_id}"
 
     def _load(self, session_id: str) -> list[dict]:
         storage = self.ctx.get("storage")           # 依赖注入: 平台存储协议

@@ -244,7 +244,7 @@ def build_dependency_graph(plugins: list[Any]) -> dict[Any, list[Any]]:
 
 
 def boot(root: Context, plugins: list[Any]) -> list[PluginMount]:
-    """拓扑装配：按 inject 依赖自动推导挂载顺序；检测依赖环。
+    """拓扑装配：按 inject 依赖自动推导挂载顺序；检测依赖环；校验 inject 契约。
 
     返回各插件的 PluginMount（供后续 unmount）。
     """
@@ -269,7 +269,22 @@ def boot(root: Context, plugins: list[Any]) -> list[PluginMount]:
     for plugin in plugins:
         visit(plugin, set())
 
-    return [root.mount(plugin) for plugin in order]
+    mounts = [root.mount(plugin) for plugin in order]
+
+    # inject 契约校验: 装配完成后, 每个插件的 inject key 必须已被提供
+    # （壳 pre-boot 注册 或 某插件 provides）——否则运行期 get 才炸, 违背"大声失败"。
+    problems = [
+        f"{plugin.__class__.__name__} inject 的 key 无人提供: {key!r}"
+        for plugin in plugins
+        for key in (getattr(plugin, "inject", []) or [])
+        if not root.has(key)
+    ]
+    if problems:
+        for m in reversed(mounts):   # 逆序撤销已挂载效果, 不留半挂装配
+            root.unmount(m)
+        raise RuntimeError("[kernel] 插件 inject 契约违规: " + "; ".join(problems))
+
+    return mounts
 
 
 def direct_dependents(plugins: list[Any], plugin: Any) -> set[Any]:

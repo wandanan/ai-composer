@@ -26,6 +26,7 @@ from kernel import Context, boot
 from extensions.platform.loops import FakeLoop, FailoverLoop
 from extensions.platform.session import SessionPlugin
 from extensions.platform.session.artifacts import list_artifacts
+from extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import OUTLINE_REPLY
 
@@ -90,7 +91,7 @@ def main() -> int:
     app = Context()
     fake = FakeLoop(name="fake-m4", replies=FAKE_REPLIES, delay=0.02)
     app.register("agentLoop", fake)
-    boot(app, [SessionPlugin(), WriterPlugin()])
+    boot(app, [RenderPlugin(), SessionPlugin(), WriterPlugin()])
 
     projects = [{"name": f"方案{i + 1:02d}", "chapters": CHAPTERS} for i in range(20)]
     batch = app.get("batch")

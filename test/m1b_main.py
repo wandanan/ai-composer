@@ -29,6 +29,7 @@ from kernel import Context, EventMode, boot
 from extensions.platform.loops import FakeLoop, HermesEnginePlugin, HermesLoop
 from kernel.protocols import AgentLoop
 from extensions.platform.session import SessionPlugin
+from extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import OUTLINE_REPLY
 
@@ -65,7 +66,7 @@ def main() -> int:
     # ── 应用壳: 平台 + 配置 + 引擎插件 + 会话 + writer 插件 ──
     app = Context()
     app.register("config", {"llm": _load_llm_config()})
-    mounts = boot(app, [HermesEnginePlugin(), SessionPlugin(), WriterPlugin()])
+    mounts = boot(app, [RenderPlugin(), HermesEnginePlugin(), SessionPlugin(), WriterPlugin()])
     order = [m.plugin.__class__.__name__ for m in mounts]
     print(f"\n[0] 装配顺序: {order}")
 
@@ -74,30 +75,35 @@ def main() -> int:
     check("HermesLoop 协议合规 (runtime_checkable)",
           isinstance(loop, AgentLoop), type(loop).__name__)
 
-    print("\n[2] 真实 LLM 调用（writer 流水线, 有 API 成本）")
-    stream_count = {"n": 0}
-    app.on("llm/stream", lambda p: stream_count.__setitem__("n", stream_count["n"] + 1),
-           EventMode.EMIT)
-
     sessions = app.get("sessions")
-    session = sessions.create_session({"project": "验证用: 跨江特大桥挂篮施工方案"})
     pipeline = app.get("writerPipeline")
-    result = pipeline.run(session, "验证用: 跨江特大桥挂篮施工方案", chapters=["编制依据"])
 
-    outline_path = os.path.join(session.dir, "outline", "outline.md")
-    chapter_path = os.path.join(session.dir, "chapters", "01_编制依据.md")
-    check("大纲产物落盘", os.path.exists(outline_path), outline_path)
-    check("章节产物落盘", os.path.exists(chapter_path), chapter_path)
+    if not skip_real:
+        print("\n[2] 真实 LLM 调用（writer 流水线, 有 API 成本）")
+        stream_count = {"n": 0}
+        app.on("llm/stream", lambda p: stream_count.__setitem__("n", stream_count["n"] + 1),
+               EventMode.EMIT)
+        session = sessions.create_session({"project": "验证用: 跨江特大桥挂篮施工方案"})
+        result = pipeline.run(session, "验证用: 跨江特大桥挂篮施工方案",
+                              chapters=["编制依据"])
 
-    with open(outline_path, encoding="utf-8") as f:
-        outline = f.read()
-    check("产物是真实 LLM 输出（非假回复表）",
-          bool(outline.strip()) and outline != OUTLINE_REPLY,
-          f"大纲前 60 字: {outline[:60].strip()}…")
+        outline_path = os.path.join(session.dir, "outline", "outline.md")
+        chapter_path = os.path.join(session.dir, "chapters", "01_编制依据.md")
+        check("大纲产物落盘", os.path.exists(outline_path), outline_path)
+        check("章节产物落盘", os.path.exists(chapter_path), chapter_path)
 
-    print("\n[3] 事件翻译（hermes 回调 → 平台事件）")
-    check("llm/stream 事件已流入平台事件总线", stream_count["n"] > 0,
-          f"收到 {stream_count['n']} 个流增量")
+        with open(outline_path, encoding="utf-8") as f:
+            outline = f.read()
+        check("产物是真实 LLM 输出（非假回复表）",
+              bool(outline.strip()) and outline != OUTLINE_REPLY,
+              f"大纲前 60 字: {outline[:60].strip()}…")
+
+        print("\n[3] 事件翻译（hermes 回调 → 平台事件）")
+        check("llm/stream 事件已流入平台事件总线", stream_count["n"] > 0,
+              f"收到 {stream_count['n']} 个流增量")
+    else:
+        print("\n[2] ⏭  --skip-real, 跳过真实 LLM 调用（需 hermes 引擎 + API key）")
+        print("      [3] 事件翻译 随 [2] 一起跳过")
 
     print("\n[4] 换引擎零改动（Hermes → FakeLoop, 同一 pipeline）")
     app.register("agentLoop", FakeLoop(name="fake-swap", replies={

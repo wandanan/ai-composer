@@ -150,6 +150,23 @@ def t06_blast_radius_transit() -> None:
     check("t06 传递闭包: blast_radius(A) = {B,C,D}", radius == {"B", "C", "D"})
 
 
+def t07_inject_missing() -> None:
+    """inject 契约: 装配完成后 key 无人提供 → 装配期报错（大声失败, 不等运行期 get）。"""
+    class NeedsGhost(Plugin):
+        inject = ["ghost"]
+        provides = ["n"]
+        def apply(self, ctx: Context):
+            ctx.register("n", 1)
+
+    ctx = Context()
+    try:
+        boot(ctx, [NeedsGhost()])
+        check("t07 inject 未提供 key → 装配期报错", False)
+    except RuntimeError as e:
+        check("t07 inject 未提供 key → 装配期报错", "inject" in str(e) and "ghost" in str(e))
+    check("t07 报错后无残留挂载", not ctx.has("n"))
+
+
 def main() -> None:
     t01_valid_plugin()
     t02_undeclared()
@@ -157,6 +174,7 @@ def main() -> None:
     t04_real_plugins()
     t05_blast_radius()
     t06_blast_radius_transit()
+    t07_inject_missing()
     print(f"\nM5 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")
     if FAIL:
         sys.exit(1)

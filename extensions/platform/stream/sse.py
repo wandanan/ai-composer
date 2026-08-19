@@ -10,11 +10,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import queue
 import threading
 from typing import Any
 
 from kernel import Context, EventMode, Plugin
+
+_log = logging.getLogger(__name__)
 
 
 class StreamService:
@@ -56,6 +59,7 @@ class StreamService:
 
     def publish(self, session_id: str, event: str, data: dict) -> None:
         if not session_id:
+            _log.warning("[stream] publish 跳过: 事件未携带 session_id (event=%r)", event)
             return
         payload = {"event": event, "data": data}
 

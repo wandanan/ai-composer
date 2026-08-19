@@ -23,9 +23,17 @@ import tempfile
 from kernel import Context, Plugin, ServiceNotFound, boot
 from extensions.platform.base import CachePlugin, ConfigPlugin, StoragePlugin, TelemetryPlugin
 from extensions.platform.base.cache import Cache, RedisCache
-from extensions.platform.base.storage import MemoryStorage, MinioStorage, ObjectStorage
+from extensions.platform.base.storage import LocalStorage, MemoryStorage, MinioStorage, ObjectStorage
 
 _PASS: list[bool] = []
+
+
+def _rejects(key: str) -> bool:
+    try:
+        LocalStorage().put(key, b"x")
+        return False
+    except ValueError:
+        return True
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
@@ -138,6 +146,15 @@ def main() -> int:
           isinstance(MinioStorage(endpoint="http://localhost:9000"), ObjectStorage))
     check("RedisCache 实现 Cache 协议",
           isinstance(RedisCache(host="127.0.0.1"), Cache))
+
+    print("\n[7] storage key 契约校验（/ 分层, 禁 : \\ .. 绝对路径）")
+    bad_keys = ["a:b", "a\\b", "../escape", "a//b", "/abs", "C:drive", "a b", ""]
+    ok_bad = all(_rejects(key) for key in bad_keys)
+    check("非法 key 全部被拒（冒号/反斜杠/穿越/绝对路径/空格/空串）", ok_bad)
+    good = LocalStorage()
+    good.put("todo/abc123/meta", b"x")
+    good.get("todo/abc123/meta")
+    check("合规 key（/ 分层）可读写", good.exists("todo/abc123/meta"))
 
     print("\n" + "=" * 64)
     failed = _PASS.count(False)

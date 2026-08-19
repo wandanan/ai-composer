@@ -19,6 +19,7 @@ from kernel import Context, boot
 from extensions.platform.loops import FakeLoop
 from kernel.protocols import AgentLoop
 from extensions.platform.session import SessionPlugin
+from extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import CHAPTER_REPLY, OUTLINE_REPLY
 
@@ -43,7 +44,7 @@ def main() -> int:
         "编制依据": CHAPTER_REPLY,
     })
     app.register("agentLoop", v1)                      # 平台注册引擎（可被覆盖）
-    boot(app, [SessionPlugin(), WriterPlugin()])
+    boot(app, [RenderPlugin(), SessionPlugin(), WriterPlugin()])
 
     print("\n[1] AgentLoop 引擎协议")
     loop = app.get("agentLoop")
