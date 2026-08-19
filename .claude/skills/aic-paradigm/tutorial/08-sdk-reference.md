@@ -96,7 +96,7 @@ AgentLoop        run_conversation(user_message, conversation_history=None, **kw)
 | extract | `ExtractPlugin(impl=None)` | `extract(content, filename, use_ocr=False, progress_callback=None, **kw) -> str`；模块函数 `extract_document(...)`；LocalExtractor 支持 docx/pdf/MinerU |
 | agentLoop | `FakeLoop(name, replies, delay)`（默认） | AgentLoop 协议（见 §2）；真实引擎 = 自挂引擎插件覆盖 |
 
-**事件契约**：事件名由业务自定义；payload 必须携带 `session_id`（stream 依赖它路由推送）。
+**事件契约**：事件名由业务自定义；payload 必须携带 `session_id`（stream 依赖它路由推送）。`StreamPlugin` 仅自动桥接 `pipeline/phase`、`chapter/status`、`pipeline/done`——**业务自定义事件要在插件 `apply` 里 `ctx.on` 桥接**（见 §5）。
 
 ## 4. 产物通道（extensions.platform.session.artifacts）
 
@@ -185,6 +185,72 @@ result = jobs.result(tid, timeout=60)
 def run_chat(session_id: str): ...
 ```
 
+### SSE 进度推送（完整可照抄）
+
+**事件 → SSE 接线规则**：`StreamPlugin` 只自动桥接三个内核事件
+（`pipeline/phase`、`chapter/status`、`pipeline/done`，payload 须带 `session_id`）。
+**业务自定义事件要自己接线**——在业务插件 `apply` 里注册桥接：
+
+```python
+class MyPlugin(Plugin):
+    inject = ["stream", ...]
+    provides = ["my"]
+
+    def apply(self, ctx: Context):
+        svc = ctx.get("stream")
+        # 业务事件 → 会话推送（payload 必须携带 session_id）
+        ctx.on("my/progress", lambda p: svc.publish(
+            p.get("session_id", ""), "my/progress", p), EventMode.EMIT)
+        ctx.register("my", MyService(...))
+```
+
+**单连接闭环端点**（创建会话 + 订阅 + 派发 + 推送 + done，一个端点走完）：
+
+```python
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+@app.post("/api/v1/discussions")
+async def create_discussion(req: DiscussReq):
+    shell = SHELL
+    session = shell.get("sessions").create_session({"topic": req.topic})
+    svc = shell.get("stream")
+    q, snapshot = svc.subscribe(session.session_id)   # 先订阅, 后派发——事件不丢
+
+    async def gen():
+        try:
+            yield _sse("session_created", {"session_id": session.session_id})
+            for item in snapshot:                      # 防御性回放（通常为空）
+                yield _sse(item["event"], item["data"])
+            jobs = shell.get("jobs")
+            jobs.register_task(TASK_RUN, run_task)     # 双路径: 见上节
+            jobs.enqueue(TASK_RUN, [session.session_id])
+            while True:
+                try:
+                    item = await asyncio.to_thread(q.get, timeout=15)
+                except Exception:
+                    yield _sse("heartbeat", {})        # 15s 心跳保活
+                    continue
+                yield _sse(item["event"], item["data"])
+                if item["event"] == "my/done":
+                    break
+        finally:
+            svc.unsubscribe(session.session_id, q)     # 断连清理
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+```
+
+要点：
+
+```
+先订阅再派发      订阅建立后才 enqueue——避免"任务快于订阅"丢事件
+事件在任务/服务里发  ctx.emit("my/progress", {...}) → 桥接 → publish → SSE（双路径都走事件总线）
+断连清理          finally 里 unsubscribe; 15s 心跳保活（q.get timeout）
+重连场景          独立流端点同模式: subscribe → 回放 snapshot → 继续; 已完成直接断开
+跨进程            StreamPlugin(redis_url=...) 时事件经 Redis pub/sub 双通道,
+                  端点侧 daemon 线程桥回队列（见安装包 apps/mvp/main.py 参考实现）
+```
+
 ## 6. 最小业务插件（照抄骨架）
 
 ```python
@@ -211,3 +277,85 @@ class ChatPlugin(Plugin):
 ```
 
 挂载（profile.py 加一行）→ 消费（端点里 `SHELL.get("chat").reply(question)`）→ 启动。
+
+## 7. 参考应用骨架：对话/问答类全链路（可整段照抄）
+
+把 AgentLoop + 会话 + 事件桥接 + SSE + 双路径任务串成一个完整应用。
+形状：**人类提问 → 两个 AI 角色轮流发言 → 全程事件推送**（圆桌对话）。
+
+### 业务插件（能力 + 事件桥接）
+
+```python
+# extensions/business/roundtable/plugin.py
+from kernel import Context, Plugin, EventMode
+
+ROLE_PROMPTS = {                      # 角色定义: 系统提示词走 **kw（引擎是"哑的"）
+    "A": "你是甲方代表, 立场: 控制成本。",
+    "B": "你是乙方代表, 立场: 保证质量。",
+}
+
+class RoundtableService:
+    """① 能力: 圆桌讨论。"""
+    def __init__(self, loop, ctx):
+        self._loop, self._ctx = loop, ctx
+
+    def turn(self, session, speaker: str, question: str) -> str:
+        self._ctx.emit("roundtable/turn", {"session_id": session.session_id,
+                                            "speaker": speaker})
+        result = self._loop.run_conversation(
+            question, system_prompt=ROLE_PROMPTS[speaker], toolsets=[])
+        self._ctx.emit("roundtable/reply", {"session_id": session.session_id,
+                                             "speaker": speaker,
+                                             "reply": result["final_response"]})
+        return result["final_response"]
+
+class RoundtablePlugin(Plugin):
+    """③ 声明 + 事件桥接（业务自定义事件要自己接线, 见 §5）。"""
+    inject = ["agentLoop", "sessions", "stream"]
+    provides = ["roundtable"]
+
+    def apply(self, ctx: Context):
+        svc = ctx.get("stream")
+        for ev in ("roundtable/turn", "roundtable/reply"):
+            ctx.on(ev, lambda p, e=ev: svc.publish(
+                p.get("session_id", ""), e, p), EventMode.EMIT)
+        ctx.register("roundtable", RoundtableService(ctx.get("agentLoop"), ctx))
+```
+
+### 端点（SSE 闭环, 见 §5 完整模式）
+
+```python
+# apps/roundtable/main.py —— lifespan 建 SHELL（§5）+ 以下端点
+@app.post("/api/v1/discussions")
+async def start(req: DiscussReq):     # 完全套用 §5 单连接闭环端点
+    ...                                #   session_created → roundtable/turn*
+    ...                                #   roundtable/reply* → roundtable/done 断开
+
+@app.get("/api/v1/discussions/{sid}")
+async def status(sid: str):           # 状态查询: 不占 SSE 连接
+    session = SHELL.get("sessions").attach(sid)
+    return {"topic": session.meta.get("topic"), "turn": session.turn}
+```
+
+### 长回复任务化（可选, 双路径）
+
+```python
+# apps/roundtable/tasks.py
+TASK_TURN = "roundtable.turn"                       # 任务名常量（单一来源）
+
+def make_inline_tasks(shell):
+    def run_turn(session_id: str, speaker: str, question: str):
+        session = shell.get("sessions").attach(session_id)
+        return shell.get("roundtable").turn(session, speaker, question)
+    return run_turn
+
+# apps/roundtable/worker.py —— 任务名协议: 与 tasks.py 同名
+@celery_app.task(name="roundtable.turn")
+def run_turn(session_id: str, speaker: str, question: str):
+    shell = build_shell()                            # worker 自举（同一组合）
+    session = shell.get("sessions").attach(session_id)
+    return shell.get("roundtable").turn(session, speaker, question)
+```
+
+**多轮发言**：`turn` 计数在会话 meta 上（`session.turn`），轮次由业务编排——
+引擎无跨轮记忆（每轮新建），历史要显式拼进 `question` 或 `conversation_history`。
