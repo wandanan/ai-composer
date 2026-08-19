@@ -182,8 +182,8 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     if not args.target and not args.plugin:
-        raise SystemExit("用法: python -m tools.uninstall <应用名> [--yes]"
-                         "  或  python -m tools.uninstall --plugin <类名> [--yes]")
+        raise SystemExit("用法: aic uninstall <应用名> [--yes]"
+                         "  或  aic uninstall --plugin <类名> [--yes]")
 
     from tools.graph import build_graph  # 元命令自包含: 直接计算, 不依赖产物
     graph = build_graph()

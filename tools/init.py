@@ -288,8 +288,11 @@ def init_app(name: str) -> dict:
 
 def main(argv: list[str] | None = None) -> None:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) < 1:
-        raise SystemExit("用法: python -m tools.init <应用名>  （如 my-app → my_app）")
+    if not args:
+        raise SystemExit("用法: aic init <应用名>  （如 my-app → my_app）")
+    if args[0] in ("-h", "--help"):
+        print("用法: aic init <应用名>  （如 my-app → my_app）")
+        return
     name = args[0].replace("-", "_")
     r = init_app(name)
     print(f"✅ 新应用已生成: {r['name']}")

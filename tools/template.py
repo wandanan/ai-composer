@@ -297,7 +297,7 @@ def _render(report: dict, dry: bool) -> str:
         lines.append(f"  输出: {report['out']}")
         if report["unmarked_shared"]:
             lines.append(f"  ⚠️ 未上浮但多应用挂载（不带走）: {report['unmarked_shared']}")
-            lines.append("     如需保留: 先 python -m tools.promote XxxPlugin --yes")
+            lines.append("     如需保留: 先 aic promote XxxPlugin --yes")
         lines.append("")
         lines.append("（预演: 未提取, 确认后去掉 --dry-run 执行）")
     else:
@@ -335,7 +335,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(1)
     print("\n✅ 模板验证通过（hello_aic 壳契约 + 装配）。"
           "\n   使用: cd 模板目录 → python -m uvicorn apps.hello_aic.main:app"
-          "\n         → python -m tools.init my-app 加新应用")
+          "\n         → aic init my-app 加新应用")
 
 
 if __name__ == "__main__":
