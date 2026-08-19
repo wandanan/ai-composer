@@ -90,11 +90,15 @@ def build_shell() -> Context:
     shell = Context()
     shell.register("config", load_config())
 
-    # 引擎是部署决策: 默认 fake（免 API 成本, 确定性）。
-    # 真实引擎 = profile.py 的 PLUGINS 挂载引擎插件（提供 "agentLoop" 即覆盖 fake）。
-    from extensions.platform.loops import FakeLoop
-    shell.register("agentLoop", FakeLoop(name="{name}-fake"))
-    plugins = PLUGINS
+    # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
+    # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
+    if shell.get("config").get("llm", {{}}).get("LLM_API_KEY"):
+        from extensions.platform.loops import OpenAIEnginePlugin
+        plugins = PLUGINS + [OpenAIEnginePlugin()]
+    else:
+        from extensions.platform.loops import FakeLoop
+        shell.register("agentLoop", FakeLoop(name="{name}-fake"))
+        plugins = PLUGINS
 
     mounts = boot(shell, plugins)
     shell._mounts = mounts  # health 端点展示用

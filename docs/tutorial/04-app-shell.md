@@ -46,10 +46,15 @@ def build_shell() -> Context:
     shell = Context()
     shell.register("config", load_config())
 
-    # 引擎是部署决策: 默认 fake（免 API 成本, 确定性）。
-    # 真实引擎 = profile.py 的 PLUGINS 挂载引擎插件（提供 "agentLoop" 即覆盖 fake）。
-    shell.register("agentLoop", FakeLoop(name="my_app-fake"))
-    plugins = PLUGINS
+    # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
+    # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
+    if shell.get("config").get("llm", {}).get("LLM_API_KEY"):
+        from extensions.platform.loops import OpenAIEnginePlugin
+        plugins = PLUGINS + [OpenAIEnginePlugin()]
+    else:
+        from extensions.platform.loops import FakeLoop
+        shell.register("agentLoop", FakeLoop(name="my_app-fake"))
+        plugins = PLUGINS
 
     mounts = boot(shell, plugins)    # 自动装配: 依赖顺序不用管
     return shell
@@ -57,7 +62,7 @@ def build_shell() -> Context:
 
 要点：
 
-- **引擎是部署决策**——默认 fake 免 API 成本；生产用真实引擎 = 在 profile.py 挂载引擎插件（提供 `agentLoop` 即覆盖 fake），平台不绑定任何引擎
+- **引擎是部署决策**——`config [llm]` 配好 `LLM_API_KEY` → 自动用 OpenAI 兼容真引擎（OpenAI/DeepSeek/通义/Kimi…，开箱即用）；没配 → fake 免 API 成本。换其他引擎 = profile.py 挂载对应引擎插件（详见 [08-SDK 参考 §8](08-sdk-reference.md)），业务零改动
 - **boot 自动装配**——按 `inject`/`provides` 拓扑排序，乱序传入也能排对，依赖环直接拒绝
 
 ## main.py：HTTP 入口

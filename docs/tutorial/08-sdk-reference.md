@@ -75,9 +75,13 @@ ToolHandler      name / toolset / schema + handle(args, **kw) -> str（业务工
 KnowledgeProvider  scope(task_id, meta) -> list[str]（知识注入）
 AgentLoop        run_conversation(user_message, conversation_history=None, **kw) -> dict
                  → 返回 {final_response, messages, token_usage, ...}; close() 释放资源
+                 流式: 引擎逐片 emit "llm/stream" 事件（payload: {session_id, delta}）,
+                 session_id 来自 **kw 的 session_id 参数——SSE 打字机效果靠它
 ```
 
 **AgentLoop 消费纪律**：每次调用时 `ctx.get("agentLoop")`，不缓存引用 → 引擎可任意替换。
+**引擎是"哑的"**：角色提示词/工具集由调用方经 `**kw` 传入（`system_prompt` / `toolsets` / `session_id`），
+引擎不组装业务 prompt——换引擎业务零改动。
 
 ## 3. 平台服务表（消费方永远 `ctx.get(key)`）
 
@@ -94,7 +98,7 @@ AgentLoop        run_conversation(user_message, conversation_history=None, **kw)
 | stream | `StreamPlugin(redis_url=None)` | `subscribe(session_id) -> (实时队列, 事件快照)` / `unsubscribe(session_id, q)` / `publish(session_id, event, data)`；`redis_enabled`（跨进程走 Redis pub/sub） |
 | sandbox | `SandboxPlugin()` | `set_workspace/get_workspace/clear_workspace` / `lock_dir_readonly(path)` / `unlock_dir(path)` / `sanitize_filename(filename, max_length=200)` |
 | extract | `ExtractPlugin(impl=None)` | `extract(content, filename, use_ocr=False, progress_callback=None, **kw) -> str`；模块函数 `extract_document(...)`；LocalExtractor 支持 docx/pdf/MinerU |
-| agentLoop | `FakeLoop(name, replies, delay)`（默认） | AgentLoop 协议（见 §2）；真实引擎 = 自挂引擎插件覆盖 |
+| agentLoop | `FakeLoop(name, replies, delay)`（无配置默认）/ `OpenAIEnginePlugin()`（配好 `LLM_API_KEY` 即真引擎） | AgentLoop 协议（见 §2）；换引擎 = 换提供 agentLoop 的插件（见 §8） |
 
 **事件契约**：事件名由业务自定义；payload 必须携带 `session_id`（stream 依赖它路由推送）。`StreamPlugin` 仅自动桥接 `pipeline/phase`、`chapter/status`、`pipeline/done`——**业务自定义事件要在插件 `apply` 里 `ctx.on` 桥接**（见 §5）。
 
@@ -359,3 +363,77 @@ def run_turn(session_id: str, speaker: str, question: str):
 
 **多轮发言**：`turn` 计数在会话 meta 上（`session.turn`），轮次由业务编排——
 引擎无跨轮记忆（每轮新建），历史要显式拼进 `question` 或 `conversation_history`。
+
+## 8. 换引擎/换插件（同一个机制）
+
+**一切都是插件组合**——换引擎和换插件是同一件事：改 `profile.py` 的 `PLUGINS` 一行。
+消费方只认 key + 协议形状（`ctx.get(key)`），永远不 import 实现。
+
+| key | 默认实现 | 可换实现 | 换法 |
+|---|---|---|---|
+| agentLoop | FakeLoop（壳按配置自动决策） | `OpenAIEnginePlugin()` / 自写引擎插件 | profile.py 加/换引擎插件 |
+| cache | MemoryCache（单进程） | `RedisCache(...)`（多进程必须） | `CachePlugin(impl=RedisCache())` |
+| storage | LocalStorage | `MemoryStorage()` / `MinioStorage(...)` | `StoragePlugin(impl=...)` |
+| jobs | ThreadJobQueue | `CeleryJobQueue(...)` / `FailoverJobQueue` | `JobsPlugin(impl=...)` |
+
+```python
+# profile.py —— 引擎是部署决策（换引擎 = 换一行）
+PLUGINS = [
+    ...,
+    OpenAIEnginePlugin(),          # 真引擎: 覆盖壳默认 fake（config [llm] 配好即可）
+    # HermesEnginePlugin(),        # 换其他引擎: 换这一行（自定义引擎见下）
+]
+```
+
+**壳的默认决策**：`config [llm]` 里 `LLM_API_KEY` 非空 → 自动挂 OpenAI 兼容真引擎；
+为空 → fake（离线开发零成本）。想固定用其他引擎 → profile.py 挂载对应引擎插件即覆盖。
+
+### 写自己的引擎适配器
+
+实现 AgentLoop 协议即可挂载（模板：发布包内置的 `extensions/platform/loops/openai/`，抄它改引擎调用）：
+
+```
+协议形状   run_conversation(user_message, conversation_history=None, **kw) -> dict
+**kw 约定  system_prompt（角色提示词）/ toolsets / session_id（流式事件用）
+返回       {final_response, messages, token_usage, ...}
+流式       逐片 ctx.emit("llm/stream", {"session_id": ..., "delta": ...}) —— 事件名与内置引擎一致
+close()    释放引擎资源
+```
+
+```python
+# extensions/platform/loops/myengine/__init__.py —— 仿 openai 适配器
+from kernel import Context, Plugin
+
+class MyEngineLoop:
+    name = "myengine"
+
+    def __init__(self, *, model: str, api_key: str, base_url: str,
+                 ctx: Context | None = None):
+        ...
+
+    def run_conversation(self, user_message, conversation_history=None, **kw):
+        system_prompt = kw.get("system_prompt", "")
+        session_id = kw.get("session_id", "")
+        ...                                        # 调你的引擎 API（流式逐片）
+        if self.ctx is not None:
+            self.ctx.emit("llm/stream", {"session_id": session_id, "delta": chunk})
+        return {"final_response": text, "messages": [...], "token_usage": {...}}
+
+    def close(self) -> None:
+        ...
+
+class MyEnginePlugin(Plugin):                      # 与 OpenAIEnginePlugin 同构
+    inject = ["config"]                            # LLM 配置来源
+    provides = ["agentLoop"]
+
+    def apply(self, ctx: Context):
+        llm = ctx.get("config").get("llm", {})
+        ctx.register("agentLoop", MyEngineLoop(
+            ctx=ctx,
+            model=llm.get("LLM_MODEL", ""),
+            api_key=llm.get("LLM_API_KEY", ""),
+            base_url=llm.get("LLM_BASE_URL", ""),
+        ))
+```
+
+挂载后即覆盖 fake——业务插件、SSE 桥接、前端全部零改动（消费方只认 `agentLoop` + 协议形状）。

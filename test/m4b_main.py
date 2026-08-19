@@ -24,6 +24,7 @@ from kernel import Context, Plugin, ServiceNotFound, boot
 from extensions.platform.base import CachePlugin, ConfigPlugin, StoragePlugin, TelemetryPlugin
 from extensions.platform.base.cache import Cache, RedisCache
 from extensions.platform.base.storage import LocalStorage, MemoryStorage, MinioStorage, ObjectStorage
+from extensions.platform.loops import FakeLoop
 
 _PASS: list[bool] = []
 
@@ -164,6 +165,21 @@ def main() -> int:
     except ValueError:
         check("不支持类型 → 抛 ValueError", True)
     check("txt 正常提取", extract_document("你好".encode("utf-8"), "a.txt") == "你好")
+
+    print("\n[9] OpenAI 兼容引擎适配器（装配, 不调真实 API）")
+    from extensions.platform.loops import OpenAIEnginePlugin
+    from kernel.protocols import AgentLoop
+    eng = Context()
+    eng.register("config", {"llm": {"LLM_MODEL": "test-model",
+                                    "LLM_API_KEY": "test-key",
+                                    "LLM_BASE_URL": "http://127.0.0.1:1",
+                                    "LLM_PROVIDER": ""}})
+    boot(eng, [OpenAIEnginePlugin()])
+    loop = eng.get("agentLoop")
+    check("OpenAIEnginePlugin 提供 agentLoop", isinstance(loop, AgentLoop))
+    check("agentLoop 从 config 读 LLM 配置",
+          getattr(loop, "_model", "") == "test-model")
+    check("FakeLoop 仍是 AgentLoop 协议", isinstance(FakeLoop(), AgentLoop))
 
     print("\n" + "=" * 64)
     failed = _PASS.count(False)

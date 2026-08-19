@@ -84,10 +84,11 @@ def t04_orphan_dynamic() -> None:
     g = build_graph()
     orphans = sorted(n for n, i in g["plugins"].items()
                      if not i["apps"] and not i["dynamic"])
-    check("t04 孤儿 = 演示 + 引擎适配器（壳不再条件追加）",
+    check("t04 孤儿 = 演示 + hermes 适配器",
           orphans == ["DemoPlugin", "EchoPlugin", "HelloPlugin", "HermesEnginePlugin"])
     dyn = sorted(n for n, i in g["plugins"].items() if i["dynamic"])
-    check("t04 动态 = 无", dyn == [])
+    check("t04 动态 = OpenAIEnginePlugin（壳按配置追加真引擎）",
+          dyn == ["OpenAIEnginePlugin"])
 
 
 def t05_factory_expansion() -> None:

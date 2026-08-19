@@ -42,10 +42,14 @@ def build_shell(config_path: str | None = None) -> tuple[Context, list]:
     shell = Context()
     shell.register("config", load_config(config_path))
 
-    # 引擎是部署决策: 默认 fake（免 API 成本）; 真实引擎 = profile.py 挂载引擎插件
-    # （提供 "agentLoop" 即覆盖 fake）
-    shell.register("agentLoop", FakeLoop(name="mvp-fake", replies=FAKE_REPLIES))
-    plugins = PLUGINS
+    # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
+    # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
+    if shell.get("config").get("llm", {}).get("LLM_API_KEY"):
+        from extensions.platform.loops import OpenAIEnginePlugin
+        plugins = PLUGINS + [OpenAIEnginePlugin()]
+    else:
+        shell.register("agentLoop", FakeLoop(name="mvp-fake", replies=FAKE_REPLIES))
+        plugins = PLUGINS
 
     mounts = boot(shell, plugins)
     return shell, mounts
