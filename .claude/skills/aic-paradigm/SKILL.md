@@ -95,6 +95,18 @@ shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_a
 - **IO 纪律**：能力里不直接写文件/连库——落盘走产物通道（`save_artifact`）或数据通道（`ctx.get("storage")`）
 - **契约**：输入 = 会话 meta（`create_session({"job": ...})`）；输出 = 产物（文件）或数据（记录）
 
+## 官方教程（Skill 内嵌副本，随 Skill 分发）
+
+写插件/壳时**直接参考教程里的完整代码示例，无需读 kernel 源码**（kernel 可能来自 pip 包 site-packages，API 以教程为准）：
+
+| 想做什么 | 教程文件 |
+|---|---|
+| API 全貌 + 最小插件完整示例（可整段照抄） | `tutorial/03-first-plugin.md` |
+| 壳与装配（profile/shell/main/tasks/worker 代码） | `tutorial/04-app-shell.md` |
+| 安装与 3 步快速开始 | `tutorial/01-installation.md` / `02-quickstart.md` |
+| 工具链流程（装/看/升/卸/模板） | `tutorial/05-tools.md` / `07-command-reference.md` |
+| 设计判断（上浮三问/契约/诚实边界） | `tutorial/06-best-practices.md` |
+
 ## 最佳实践（上浮三问）
 
 ```
