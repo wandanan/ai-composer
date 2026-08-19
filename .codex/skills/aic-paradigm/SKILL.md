@@ -93,6 +93,9 @@ shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_a
 - **消费纪律**：每次调用时 `ctx.get(key)`，不缓存引用（缓存了替换就失效）
 - **能力面纪律**：`provides` 必须覆盖 `apply` 里注册的全部 key
 - **IO 纪律**：能力里不直接写文件/连库——落盘走产物通道（`save_artifact`）或数据通道（`ctx.get("storage")`）
+- **复用优先纪律**：动手写任何能力前，先查 SDK 参考（§3 服务表 / §8 换引擎换插件）——
+  平台已内置的能力（含 OpenAI 兼容引擎 `OpenAIEnginePlugin`）直接挂载使用，**不要自己实现**；
+  只有平台没有的才按 §8 写自定义实现（引擎适配器 = 扩展场景）
 - **契约**：输入 = 会话 meta（`create_session({"job": ...})`）；输出 = 产物（文件）或数据（记录）
 
 ## 官方教程（Skill 内嵌副本，随 Skill 分发）

@@ -388,9 +388,11 @@ PLUGINS = [
 **壳的默认决策**：`config [llm]` 里 `LLM_API_KEY` 非空 → 自动挂 OpenAI 兼容真引擎；
 为空 → fake（离线开发零成本）。想固定用其他引擎 → profile.py 挂载对应引擎插件即覆盖。
 
-### 写自己的引擎适配器
+### 写自己的引擎适配器（扩展场景——优先用内置的 `OpenAIEnginePlugin`）
 
-实现 AgentLoop 协议即可挂载（模板：发布包内置的 `extensions/platform/loops/openai/`，抄它改引擎调用）：
+> 复用优先：平台已内置 OpenAI 兼容引擎（OpenAI/DeepSeek/通义/Kimi…，配好 `LLM_API_KEY` 即用）。
+> 只有需要非 OpenAI 兼容引擎时才自己写——实现 AgentLoop 协议即可挂载
+> （模板：发布包内置的 `extensions/platform/loops/openai/`，抄它改引擎调用）：
 
 ```
 协议形状   run_conversation(user_message, conversation_history=None, **kw) -> dict
