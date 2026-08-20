@@ -73,7 +73,7 @@ ctx.register("storage", MinioStorage())    # 之前是 FileStorage()
 
 ```
 壳布局契约:  装配组 5 文件齐全 + 入口至少一个 + config 为目录
-壳内容契约:  壳内自定义 .py 不得 import extensions.* / 定义 Plugin / 接线动作
+壳内容契约:  壳内自定义 .py 不得 import aic.extensions.* / 定义 Plugin / 接线动作
 任务名协议:  shell 注册的任务名必须与 worker 侧同名（跨进程契约）
 插件区:      除地基（kernel/apps/tools）外一切目录皆可放插件; extensions/ 是惯例位
 ```

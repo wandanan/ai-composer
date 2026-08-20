@@ -6,7 +6,7 @@
 
 - 所有命令在项目根目录执行
 - **预演语义**：promote / uninstall 默认只显示影响清单（预演，不实际执行）——确认后加 `--yes`
-- 仓库开发模式等价命令：`python -m tools.cli <命令>`（或 `python -m tools.<命令>`）
+- 仓库开发模式等价命令：`python -m aic.tools.cli <命令>`（或 `python -m aic.tools.<命令>`）
 - `KIT_PROJECT_ROOT=<路径>` 可指定项目根（测试、多项目场景）
 
 ## 按目标速查
@@ -140,7 +140,7 @@ cd ~/my-tpl                           # ② 进入模板
 pip install -r requirements.txt       # ③ 安装依赖
 python test/template_check.py         # ④ 模板自检（壳契约 + hello_aic 装配）
 aic init my_biz                       # ⑤ 在模板上加新应用
-uvicorn apps.hello_aic.main:app       # ⑥ 示例应用开箱即用
+uvicorn aic.apps.hello_aic.main:app       # ⑥ 示例应用开箱即用
 ```
 
 **这是范式的推荐起步方式**：新项目从"已验证的公共插件"开始，而不是空白骨架。

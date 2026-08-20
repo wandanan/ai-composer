@@ -15,11 +15,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import os
 
-from kernel import Context, boot
-from extensions.platform.loops import FakeLoop
-from kernel.protocols import AgentLoop
-from extensions.platform.session import SessionPlugin
-from extensions.platform.render import RenderPlugin
+from aic.kernel import Context, boot
+from aic.extensions.platform.loops import FakeLoop
+from aic.kernel.protocols import AgentLoop
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import CHAPTER_REPLY, OUTLINE_REPLY
 

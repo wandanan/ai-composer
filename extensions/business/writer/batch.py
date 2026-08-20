@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from kernel import Context
+from aic.kernel import Context
 
 
 class BatchRunner:

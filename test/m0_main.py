@@ -15,8 +15,8 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kernel import Context, EventMode, ServiceNotFound, boot
-from kernel.protocols import AgentTask
+from aic.kernel import Context, EventMode, ServiceNotFound, boot
+from aic.kernel.protocols import AgentTask
 from extensions.business.demo import DemoPlugin, EchoPlugin
 from extensions.business.demo.plugin import Greeter
 

@@ -1,8 +1,8 @@
 """biz/writer/task.py — 编写任务（AgentTask 协议实现）。"""
 from __future__ import annotations
 
-from kernel import Context
-from kernel.protocols import AgentTask, Phase
+from aic.kernel import Context
+from aic.kernel.protocols import AgentTask, Phase
 
 # 测试/验证用确定性回复（接入真实 LLM 后由引擎输出替代）
 OUTLINE_REPLY = """# 施工方案大纲

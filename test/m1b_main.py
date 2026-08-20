@@ -25,12 +25,12 @@ import sys
 # hermes-agent 本地源码路径（正式接入改为 pip 安装后移除本块）
 HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 
-from kernel import Context, EventMode, boot
-from extensions.platform.loops import FakeLoop
-from extensions.platform.loops.hermes import HermesEnginePlugin, HermesLoop
-from kernel.protocols import AgentLoop
-from extensions.platform.session import SessionPlugin
-from extensions.platform.render import RenderPlugin
+from aic.kernel import Context, EventMode, boot
+from aic.extensions.platform.loops import FakeLoop
+from aic.extensions.platform.loops.hermes import HermesEnginePlugin, HermesLoop
+from aic.kernel.protocols import AgentLoop
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import OUTLINE_REPLY
 

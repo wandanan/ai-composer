@@ -8,9 +8,9 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from kernel import Context, ServiceNotFound
-from kernel.protocols import Phase
-from extensions.platform.session.artifacts import (
+from aic.kernel import Context, ServiceNotFound
+from aic.kernel.protocols import Phase
+from aic.extensions.platform.session.artifacts import (
     list_artifacts,
     next_draft_version,
     read_artifact,

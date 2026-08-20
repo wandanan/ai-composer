@@ -7,7 +7,7 @@
 """
 from __future__ import annotations
 
-from kernel import Context, Plugin, ServiceNotFound
+from aic.kernel import Context, Plugin, ServiceNotFound
 
 from extensions.business.writer.batch import BatchRunner
 from extensions.business.writer.feedback import FeedbackService

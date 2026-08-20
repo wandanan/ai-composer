@@ -20,11 +20,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import os
 import tempfile
 
-from kernel import Context, Plugin, ServiceNotFound, boot
-from extensions.platform.base import CachePlugin, ConfigPlugin, StoragePlugin, TelemetryPlugin
-from extensions.platform.base.cache import Cache, RedisCache
-from extensions.platform.base.storage import LocalStorage, MemoryStorage, MinioStorage, ObjectStorage
-from extensions.platform.loops import FakeLoop
+from aic.kernel import Context, Plugin, ServiceNotFound, boot
+from aic.extensions.platform.base import CachePlugin, ConfigPlugin, StoragePlugin, TelemetryPlugin
+from aic.extensions.platform.base.cache import Cache, RedisCache
+from aic.extensions.platform.base.storage import LocalStorage, MemoryStorage, MinioStorage, ObjectStorage
+from aic.extensions.platform.loops import FakeLoop
 
 _PASS: list[bool] = []
 
@@ -158,7 +158,7 @@ def main() -> int:
     check("合规 key（/ 分层）可读写", good.exists("todo/abc123/meta"))
 
     print("\n[8] extract 失败区分（大声失败, 不静默返回空串）")
-    from extensions.platform.extract import extract_document
+    from aic.extensions.platform.extract import extract_document
     try:
         extract_document(b"x", "a.xyz")
         check("不支持类型 → 抛 ValueError", False)
@@ -167,8 +167,8 @@ def main() -> int:
     check("txt 正常提取", extract_document("你好".encode("utf-8"), "a.txt") == "你好")
 
     print("\n[9] OpenAI 兼容引擎适配器（装配, 不调真实 API）")
-    from extensions.platform.loops import OpenAIEnginePlugin
-    from kernel.protocols import AgentLoop
+    from aic.extensions.platform.loops import OpenAIEnginePlugin
+    from aic.kernel.protocols import AgentLoop
     eng = Context()
     eng.register("config", {"llm": {"LLM_MODEL": "test-model",
                                     "LLM_API_KEY": "test-key",
@@ -182,7 +182,7 @@ def main() -> int:
     check("FakeLoop 仍是 AgentLoop 协议", isinstance(FakeLoop(), AgentLoop))
 
     print("\n[10] SessionPlugin runtime_dir 注入（多机部署统一会话目录）")
-    from extensions.platform.session import SessionPlugin
+    from aic.extensions.platform.session import SessionPlugin
     sd = os.path.join(tempfile.mkdtemp(prefix="m4b_sess_"), "sessions")
     sess_ctx = Context()
     boot(sess_ctx, [SessionPlugin(runtime_dir=sd)])

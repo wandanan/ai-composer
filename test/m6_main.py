@@ -34,8 +34,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kernel import Context, Plugin, boot, check_bypass_imports, check_shell_layout
-from kernel.layout import ASSEMBLY_FILES, ENTRY_FILES
+from aic.kernel import Context, Plugin, boot, check_bypass_imports, check_shell_layout
+from aic.kernel.layout import ASSEMBLY_FILES, ENTRY_FILES
 
 PASS: list[str] = []
 FAIL: list[str] = []
@@ -87,13 +87,18 @@ def t01_layout_valid() -> None:
 def t02_real_apps() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ok = True
-    for name in ("mvp", "review", "todo", "file_convert", "hello_aic"):
+    for name in ("mvp", "review", "todo", "file_convert"):   # 用户空间应用（平铺根 apps/）
         try:
             check_shell_layout(os.path.join(root, "apps", name))
         except RuntimeError as e:
             print(f"    {name}: {e}")
             ok = False
-    check("t02 真实 4 应用目录全部通过布局检查", ok)
+    try:   # 框架示例应用（0.2.0: 在 aic/apps/）
+        check_shell_layout(os.path.join(root, "aic", "apps", "hello_aic"))
+    except RuntimeError as e:
+        print(f"    hello_aic: {e}")
+        ok = False
+    check("t02 真实应用目录全部通过布局检查", ok)
 
 
 def t03_missing_assembly() -> None:
@@ -184,7 +189,7 @@ def _content_shell(base: str) -> str:
 
 
 def t16_content_valid() -> None:
-    from kernel import check_shell_content
+    from aic.kernel import check_shell_content
     with tempfile.TemporaryDirectory() as base:
         d = _content_shell(base)
         # 合法壳内组织: fastapi router + pydantic 模型 + SHELL.get 消费
@@ -202,7 +207,7 @@ def t16_content_valid() -> None:
 
 
 def t17_content_import_business() -> None:
-    from kernel import check_shell_content
+    from aic.kernel import check_shell_content
     with tempfile.TemporaryDirectory() as base:
         d = _content_shell(base)
         with open(os.path.join(d, "routers", "evil.py"), "w", encoding="utf-8") as f:
@@ -215,11 +220,11 @@ def t17_content_import_business() -> None:
 
 
 def t18_content_plugin_class() -> None:
-    from kernel import check_shell_content
+    from aic.kernel import check_shell_content
     with tempfile.TemporaryDirectory() as base:
         d = _content_shell(base)
         with open(os.path.join(d, "routers", "evil2.py"), "w", encoding="utf-8") as f:
-            f.write("from kernel import Plugin\n"
+            f.write("from aic.kernel import Plugin\n"
                     "class Evil(Plugin):\n    provides = []\n"
                     "    def apply(self, ctx):\n        pass\n")
         try:
@@ -231,7 +236,7 @@ def t18_content_plugin_class() -> None:
 
 
 def t19_content_wiring() -> None:
-    from kernel import check_shell_content
+    from aic.kernel import check_shell_content
     with tempfile.TemporaryDirectory() as base:
         d = _content_shell(base)
         with open(os.path.join(d, "routers", "evil3.py"), "w", encoding="utf-8") as f:
@@ -246,14 +251,14 @@ def t19_content_wiring() -> None:
 # ── 任务名协议 ────────────────────────────────────
 
 def _jobs_ctx(app_pkg: str, impl=None) -> Context:
-    from extensions.platform.base.jobs import JobsPlugin
+    from aic.extensions.platform.base.jobs import JobsPlugin
     ctx = Context()
     boot(ctx, [JobsPlugin(app_pkg=app_pkg, impl=impl)])
     return ctx
 
 
 def t09_valid_names() -> None:
-    from extensions.platform.base.jobs import _WORKER_TASKS_CACHE
+    from aic.extensions.platform.base.jobs import _WORKER_TASKS_CACHE
     ctx = _jobs_ctx("mvp")
     jobs = ctx.get("jobs")
     jobs.register_task("writer.run_pipeline", lambda *a: None)
@@ -288,7 +293,7 @@ def t11_empty_slot() -> None:
 
 
 def t12_failover_double_register() -> None:
-    from extensions.platform.base.jobs import FailoverJobQueue, ThreadJobQueue
+    from aic.extensions.platform.base.jobs import FailoverJobQueue, ThreadJobQueue
     primary = ThreadJobQueue()
     fallback = ThreadJobQueue()
     ctx = _jobs_ctx("mvp", impl=FailoverJobQueue(primary=primary, fallback=fallback))
@@ -327,7 +332,7 @@ def t14_smoke_shells() -> None:
 
 
 def t15_init_templates() -> None:
-    from tools.init import APP_PROFILE, APP_SHELL, APP_TASKS, APP_WORKER
+    from aic.tools.init import APP_PROFILE, APP_SHELL, APP_TASKS, APP_WORKER
     ctx = {"name": "demo_app", "Name": "DemoApp"}
     rendered = [t.format(**ctx) for t in (APP_SHELL, APP_PROFILE, APP_TASKS, APP_WORKER)]
     check("t15 模板渲染无残留花括号", all("{{" not in r and "}}" not in r for r in rendered))
@@ -363,8 +368,8 @@ def t20_bypass_real_root() -> None:
 def t21_bypass_app_direct() -> None:
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
-            "apps/demo/profile.py": "from extensions.platform.base import StoragePlugin\n",
-            "apps/demo/main.py": "from extensions.platform.base.storage import LocalStorage\n",
+            "apps/demo/profile.py": "from aic.extensions.platform.base import StoragePlugin\n",
+            "apps/demo/main.py": "from aic.extensions.platform.base.storage import LocalStorage\n",
         })
         try:
             check_bypass_imports(base)
@@ -379,7 +384,7 @@ def t22_bypass_business_platform() -> None:
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
             "extensions/business/demo/plugin.py":
-                "from extensions.platform.base.storage import LocalStorage\n",
+                "from aic.extensions.platform.base.storage import LocalStorage\n",
         })
         try:
             check_bypass_imports(base)
@@ -422,9 +427,9 @@ def t25_bypass_composition_ok() -> None:
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
             "apps/demo/profile.py":
-                "from extensions.platform.base.jobs import CeleryJobQueue, ThreadJobQueue\n",
-            "apps/demo/shell.py": "from extensions.platform.loops import FakeLoop\n",
-            "apps/demo/main.py": "from extensions.platform.session import SessionPlugin\n",
+                "from aic.extensions.platform.base.jobs import CeleryJobQueue, ThreadJobQueue\n",
+            "apps/demo/shell.py": "from aic.extensions.platform.loops import FakeLoop\n",
+            "apps/demo/main.py": "from aic.extensions.platform.session import SessionPlugin\n",
         })
         try:
             check_bypass_imports(base)
@@ -438,10 +443,10 @@ def t26_bypass_utility_ok() -> None:
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
             "apps/demo/main.py":
-                "from extensions.platform.extract import extract_document\n"
-                "from extensions.platform.session.artifacts import list_artifacts\n",
+                "from aic.extensions.platform.extract import extract_document\n"
+                "from aic.extensions.platform.session.artifacts import list_artifacts\n",
             "extensions/business/demo/plugin.py":
-                "from extensions.platform.session.artifacts import save_artifact\n",
+                "from aic.extensions.platform.session.artifacts import save_artifact\n",
         })
         try:
             check_bypass_imports(base)
@@ -469,7 +474,7 @@ def t28_bypass_review_excluded() -> None:
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
             "apps/review/main.py":
-                "from extensions.platform.base.storage import LocalStorage\n",
+                "from aic.extensions.platform.base.storage import LocalStorage\n",
             "extensions/business/review/plugin.py":
                 "from apps.review.tasks import TASK_X\n",
         })
@@ -484,8 +489,8 @@ def t28_bypass_review_excluded() -> None:
 def t29_bypass_deterministic() -> None:
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
-            "apps/demo/b.py": "from extensions.platform.base.storage import LocalStorage\n",
-            "apps/demo/a.py": "from extensions.platform.base.cache import RedisCache\n",
+            "apps/demo/b.py": "from aic.extensions.platform.base.storage import LocalStorage\n",
+            "apps/demo/a.py": "from aic.extensions.platform.base.cache import RedisCache\n",
         })
         m1 = m2 = None
         for i in (1, 2):

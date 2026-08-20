@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import os
 
-from extensions.platform.base import CachePlugin, ConfigPlugin, JobsPlugin, StoragePlugin, TelemetryPlugin
-from extensions.platform.base.jobs import CeleryJobQueue, FailoverJobQueue, ThreadJobQueue
-from extensions.platform.render import RenderPlugin
-from extensions.platform.security.sandbox import SandboxPlugin
-from extensions.platform.session import SessionPlugin
-from extensions.platform.stream import StreamPlugin
+from aic.extensions.platform.base import CachePlugin, ConfigPlugin, JobsPlugin, StoragePlugin, TelemetryPlugin
+from aic.extensions.platform.base.jobs import CeleryJobQueue, FailoverJobQueue, ThreadJobQueue
+from aic.extensions.platform.render import RenderPlugin
+from aic.extensions.platform.security.sandbox import SandboxPlugin
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.stream import StreamPlugin
 from extensions.business.writer import WriterPlugin
 
 # 任务队列: Celery 主（broker 可用时）→ 线程池降级（Redis 未启动/故障时）

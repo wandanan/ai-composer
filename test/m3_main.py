@@ -26,12 +26,12 @@ HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 from docx import Document as DocxDocument
 from docx.shared import RGBColor
 
-from kernel import Context, boot
-from extensions.platform.loops import FakeLoop
-from extensions.platform.loops.hermes import HermesLoop
-from extensions.platform.render import ArtifactRenderer, RenderPlugin
-from extensions.platform.session import SessionPlugin
-from extensions.platform.session.artifacts import list_artifacts, read_artifact
+from aic.kernel import Context, boot
+from aic.extensions.platform.loops import FakeLoop
+from aic.extensions.platform.loops.hermes import HermesLoop
+from aic.extensions.platform.render import ArtifactRenderer, RenderPlugin
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.session.artifacts import list_artifacts, read_artifact
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.knowledge import WritingKnowledgeProvider
 from extensions.business.writer.render import TEMPLATE_STYLE

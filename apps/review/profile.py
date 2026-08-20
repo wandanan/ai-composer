@@ -8,7 +8,7 @@
 """
 import os
 
-from extensions.platform.base import (
+from aic.extensions.platform.base import (
     CachePlugin,
     ConfigPlugin,
     DbPlugin,
@@ -16,10 +16,10 @@ from extensions.platform.base import (
     StoragePlugin,
     TelemetryPlugin,
 )
-from extensions.platform.security import SandboxPlugin
-from extensions.platform.stream import StreamPlugin
-from extensions.platform.extract import ExtractPlugin
-from extensions.business.standard import StandardPlugin
+from aic.extensions.platform.security import SandboxPlugin
+from aic.extensions.platform.stream import StreamPlugin
+from aic.extensions.platform.extract import ExtractPlugin
+from aic.extensions.platform.standard import StandardPlugin
 from extensions.business.review import ReviewPlugin
 
 
@@ -27,7 +27,7 @@ def _cache_plugin():
     """cache 实现按环境切换: KIT_CACHE_URL → RedisCache（多进程共享）, 默认 MemoryCache。"""
     url = os.environ.get("KIT_CACHE_URL", "")
     if url:
-        from extensions.platform.base.cache import RedisCache
+        from aic.extensions.platform.base.cache import RedisCache
         return CachePlugin(impl=RedisCache(url=url))
     return CachePlugin()
 

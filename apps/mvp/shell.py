@@ -8,9 +8,9 @@ from __future__ import annotations
 import configparser
 import os
 
-from kernel import (Context, boot, check_bypass_imports,
+from aic.kernel import (Context, boot, check_bypass_imports,
                     check_shell_content, check_shell_layout)
-from extensions.platform.loops import FakeLoop
+from aic.extensions.platform.loops import FakeLoop
 from apps.mvp.profile import PLUGINS
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -47,7 +47,7 @@ def build_shell(config_path: str | None = None) -> tuple[Context, list]:
     # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
     # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
     if shell.get("config").get("llm", {}).get("LLM_API_KEY"):
-        from extensions.platform.loops import OpenAIEnginePlugin
+        from aic.extensions.platform.loops import OpenAIEnginePlugin
         plugins = PLUGINS + [OpenAIEnginePlugin()]
     else:
         shell.register("agentLoop", FakeLoop(name="mvp-fake", replies=FAKE_REPLIES))

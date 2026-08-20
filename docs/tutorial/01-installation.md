@@ -72,13 +72,15 @@ aic --help
 ## 安装后获得什么
 
 ```
-ai-composer 包
-├── kernel/        内核机制（服务注册/事件/装配/可逆卸载）——零第三方依赖
-├── extensions/    插件区（公共插件: 配置/存储/缓存/队列/数据库/沙箱/SSE/文档提取…）
-├── apps/
-│   └── hello_aic/ 示例应用（挂载全部公共插件, 新项目的起点模板）
-├── tools/         工具链（aic 命令的实现）
-└── docs/          学习文档
+ai-composer 包（0.2.0: 只装 aic 一个顶层包, 与用户业务命名空间互不冲突）
+├── aic/
+│   ├── __init__.py   统一入口（import aic → Context/Plugin/boot/__version__）
+│   ├── kernel/       内核机制（服务注册/事件/装配/可逆卸载）——零第三方依赖
+│   ├── extensions/
+│   │   └── platform/ 框架平台插件（配置/存储/缓存/队列/数据库/沙箱/SSE/文档提取…）
+│   ├── apps/hello_aic/ 示例应用（挂载全部公共插件, 新项目的起点模板）
+│   └── tools/        工具链（aic 命令的实现）
+└── docs/             学习文档
 ```
 
 ## 下一步

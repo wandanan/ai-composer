@@ -26,7 +26,7 @@ app = FastAPI(title="file_convert", lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    from kernel import ServiceNotFound
+    from aic.kernel import ServiceNotFound
     plugins = [m.plugin.__class__.__name__ for m in SHELL._mounts]
     jobs_health = "?"
     try:

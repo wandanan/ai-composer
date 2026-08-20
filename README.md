@@ -99,21 +99,22 @@ uvicorn apps.my_app.main:app --port 8001
 # http://127.0.0.1:8001/health → plugins 列表含 MyAppPlugin
 
 # 示例应用（挂载全部公共插件, 开箱即用）:
-uvicorn apps.hello_aic.main:app --port 8000
+uvicorn aic.apps.hello_aic.main:app --port 8000
 ```
 
-## 工具链（aic 五命令）
+## 工具链（aic 六命令）
 
 ```
 aic init <name>              装    创建新应用（壳 + 插件骨架）
 aic graph                    看    生成项目结构图谱 graph-viz.html（自包含交互）
+aic caps                     查    显示框架可用能力（平台服务/业务插件/声明工具/引擎）
 aic promote <类> [--yes]     升    私有插件上浮为公共插件（移动包 + 更新引用 + PUBLIC 标记）
 aic uninstall <应用> [--yes] 卸    应用/插件卸载（影响分析后删除）
 aic template <应用> [--out]  模板  提取新应用开发模板（只带走公共插件）
 ```
 
 - promote / uninstall 默认**预演**（只显示影响清单），加 `--yes` 执行
-- 仓库开发模式等价命令：`python -m tools.cli <命令>`
+- 仓库开发模式等价命令：`python -m aic.tools.cli <命令>`
 
 ## 范式核心用法：模板沉淀飞轮
 
@@ -125,30 +126,30 @@ aic template <应用> [--out]  模板  提取新应用开发模板（只带走�
   → 新项目又沉淀新的公共插件 → 模板越来越强
 ```
 
-## 目录结构（0.1 发布版）
+## 目录结构（0.2.0 发布版）
 
 ```
-ai-composer/
-├── kernel/                # L1 内核（纯机制, 零能力零业务, 零第三方依赖）
-│   ├── kernel.py          #   Context/事件总线/挂载卸载/拓扑装配
-│   ├── layout.py          #   壳布局契约（存在性 + 内容 AST 检查, 机制强制）
-│   └── protocols.py       #   协议清单（AgentTask/ToolHandler/...）
-├── extensions/            # L2 插件（推荐目录——插件区隐式, 除地基外皆可放）
-│   ├── platform/          #   通用插件惯例位（配置/遥测/存储/缓存/队列/数据库/
-│   │                      #   沙箱/SSE/文档提取/引擎）
-│   └── business/          #   领域插件惯例位（writer/review/todo/file_convert/
-│                           #   共享领域 standard）
-├── apps/                  # L3 应用壳（组合与入口）
-│   ├── hello_aic/         #   示例应用（挂载全部公共插件, 新项目起点）
-│   ├── mvp/               #   参考应用（FastAPI + SSE + 任务双路径）
-│   └── review/            #   审查应用（strangler 重构产物）
-├── tools/                 # 工具链（aic 命令实现）
+ai-composer/               # 发布包只装 aic*（框架 = 平台）; 业务平铺在项目根
+├── aic/
+│   ├── __init__.py        # 统一入口: import aic → Context/Plugin/boot/__version__
+│   ├── kernel/            # L1 内核（纯机制, 零能力零业务, 零第三方依赖）
+│   │   ├── kernel.py      #   Context/事件总线/挂载卸载/拓扑装配
+│   │   ├── layout.py      #   壳布局契约（存在性 + 内容 AST 检查, 机制强制）
+│   │   ├── imports.py     #   旁路 import 契约（装配期检查跨盒依赖）
+│   │   └── protocols.py   #   协议清单（AgentTask/ToolHandler/...）
+│   ├── extensions/
+│   │   └── platform/      #   框架平台插件（配置/遥测/存储/缓存/队列/数据库/
+│   │                      #   沙箱/SSE/文档提取/引擎/规范检索）
+│   ├── apps/hello_aic/    #   示例应用（模板基础, 新项目起点）
+│   └── tools/             #   工具链（aic 六命令实现）
+├── apps/                  # 用户应用壳（平铺, 不进发布包——业务示例 mvp/review/todo/file_convert）
+├── extensions/business/   # 用户业务插件（平铺; 项目平台 extensions/platform 是 promote 上浮目标）
 ├── docs/
 │   ├── tutorial/          # 官方教程（安装/快速开始/首个插件/应用壳/工具链/最佳实践/命令参考）
 │   └── reference/         # 社区生态调研（dsh/Cordis/LangChain 对照, 设计参考）
-├── test/                  # 回归验证（m0~m7, 61 项）
+├── test/                  # 回归验证（m0~m7 全绿）
 ├── .claude/ .codex/ .agent/   # 开发 Skill（约束/规范/命令速查, AI 开发自动加载）
-└── pyproject.toml         # 0.1.0（pip 包, aic 入口）
+└── pyproject.toml         # 0.2.0（pip 包, aic 入口）
 ```
 
 ## 文档

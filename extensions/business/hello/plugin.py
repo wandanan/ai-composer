@@ -5,8 +5,8 @@
   - 插件入口 → 声明 inject（需要什么）/ provides（提供什么）
   - 消费平台能力 → ctx.get(key) 协议调用（本模板未用, 见 writer 插件实例）
 """
-from kernel import Context, Plugin
-from kernel.protocols import AgentTask, Phase
+from aic.kernel import Context, Plugin
+from aic.kernel.protocols import AgentTask, Phase
 
 
 class HelloTask:

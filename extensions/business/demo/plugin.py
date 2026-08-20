@@ -6,8 +6,8 @@
 """
 from __future__ import annotations
 
-from kernel import Context, EventMode, Plugin
-from kernel.protocols import AgentTask, Phase
+from aic.kernel import Context, EventMode, Plugin
+from aic.kernel.protocols import AgentTask, Phase
 
 
 class Greeter:

@@ -12,8 +12,8 @@ import csv
 import io
 import json
 
-from kernel import Context, Plugin
-from extensions.platform.session.artifacts import save_artifact
+from aic.kernel import Context, Plugin
+from aic.extensions.platform.session.artifacts import save_artifact
 
 
 class ConverterService:

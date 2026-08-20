@@ -85,7 +85,7 @@ async def upload_file(files: list[UploadFile]):
     对齐原项目 FileService.upload: 白名单校验 + 50MB 上限 + 空文件拒绝。
     """
     from extensions.business.review.data import ReviewFile
-    from extensions.platform.extract import ALLOWED_TYPES
+    from aic.extensions.platform.extract import ALLOWED_TYPES
 
     out = []
     for f in files:

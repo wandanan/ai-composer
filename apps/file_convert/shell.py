@@ -1,4 +1,4 @@
-"""apps/file_convert/shell.py — 装配（tools.init 生成）。
+"""apps/file_convert/shell.py — 装配（aic.tools.init 生成）。
 
 与 apps/mvp/shell.py 同构: 注册 config + 引擎决策 + boot 插件组合。
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 import configparser
 import os
 
-from kernel import (Context, boot, check_bypass_imports,
+from aic.kernel import (Context, boot, check_bypass_imports,
                     check_shell_content, check_shell_layout)
 from apps.file_convert.profile import PLUGINS
 
@@ -32,10 +32,10 @@ def build_shell() -> Context:
     # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
     # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
     if shell.get("config").get("llm", {}).get("LLM_API_KEY"):
-        from extensions.platform.loops import OpenAIEnginePlugin
+        from aic.extensions.platform.loops import OpenAIEnginePlugin
         plugins = PLUGINS + [OpenAIEnginePlugin()]
     else:
-        from extensions.platform.loops import FakeLoop
+        from aic.extensions.platform.loops import FakeLoop
         shell.register("agentLoop", FakeLoop(name="file_convert-fake"))
         plugins = PLUGINS
 

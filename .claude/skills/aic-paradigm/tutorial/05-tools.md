@@ -18,7 +18,7 @@ init（装）→ graph（看）→ caps（查）→ promote（升）→ uninstal
 | `aic uninstall <应用> [--yes]` | 卸载应用/插件 | 默认预演：只显示影响清单，加 `--yes` 执行 |
 | `aic template <应用> [--out]` | 提取新应用开发模板 | 提取到 aic-template/（`--dry-run` 预演） |
 
-仓库开发模式等价命令：`python -m tools.cli <命令>`（或 `python -m tools.<命令>`）。
+仓库开发模式等价命令：`python -m aic.tools.cli <命令>`（或 `python -m aic.tools.<命令>`）。
 所有工具支持 `KIT_PROJECT_ROOT` 环境变量指定项目根（测试用）。
 完整的命令速查与开发规范见项目 Skill（`.claude/skills/aic-paradigm/`）。
 

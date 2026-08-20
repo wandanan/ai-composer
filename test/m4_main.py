@@ -22,11 +22,11 @@ import py_compile
 import sys
 import tempfile
 
-from kernel import Context, boot
-from extensions.platform.loops import FakeLoop, FailoverLoop
-from extensions.platform.session import SessionPlugin
-from extensions.platform.session.artifacts import list_artifacts
-from extensions.platform.render import RenderPlugin
+from aic.kernel import Context, boot
+from aic.extensions.platform.loops import FakeLoop, FailoverLoop
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.session.artifacts import list_artifacts
+from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import OUTLINE_REPLY
 

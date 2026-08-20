@@ -1,4 +1,4 @@
-"""apps/file_convert/worker.py — Celery worker 入口（空档位骨架, tools.init 生成）。
+"""apps/file_convert/worker.py — Celery worker 入口（空档位骨架, aic.tools.init 生成）。
 
 无任务注册时的状态:
 - celery_app 存在（任务名协议的内省目标: 本模块内 @celery_app.task 注册的任务名）

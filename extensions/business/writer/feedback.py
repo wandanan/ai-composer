@@ -5,8 +5,8 @@
 """
 from __future__ import annotations
 
-from kernel import Context
-from extensions.platform.session.artifacts import list_artifacts
+from aic.kernel import Context
+from aic.extensions.platform.session.artifacts import list_artifacts
 
 
 class FeedbackService:

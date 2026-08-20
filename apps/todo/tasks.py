@@ -1,6 +1,6 @@
 """apps/todo/tasks.py — 任务定义（双路径: 线程内联 + Celery worker 自举）。
 
-空档位骨架（tools.init 生成）: 同步应用可不注册任何任务, 但文件必须存在
+空档位骨架（aic.tools.init 生成）: 同步应用可不注册任何任务, 但文件必须存在
 （壳布局契约: 装配组 tasks.py/worker.py 必须齐全）。
 需要异步任务时（参考 apps/mvp/tasks.py）:
   1. 定义任务名常量 TASK_X = "todo.x"

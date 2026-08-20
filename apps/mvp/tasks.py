@@ -45,7 +45,7 @@ def _task_runner(config_path: str, runtime_dir: str):
 
 def make_inline_tasks(shell):
     """线程降级路径: 复用 API 进程 shell 的内联任务（闭包捕获 shell）。"""
-    from extensions.platform.session.artifacts import list_artifacts
+    from aic.extensions.platform.session.artifacts import list_artifacts
 
     def run_pipeline(session_id: str, project_info: str, chapters: list) -> dict:
         session = shell.get("sessions").attach(session_id)

@@ -18,9 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 
-from kernel import Context, Plugin, ServiceNotFound, boot
-from extensions.platform.base import CachePlugin, ConfigPlugin, StoragePlugin, TelemetryPlugin
-from extensions.platform.base.jobs import (
+from aic.kernel import Context, Plugin, ServiceNotFound, boot
+from aic.extensions.platform.base import CachePlugin, ConfigPlugin, StoragePlugin, TelemetryPlugin
+from aic.extensions.platform.base.jobs import (
     CeleryJobQueue,
     FailoverJobQueue,
     JobQueue,

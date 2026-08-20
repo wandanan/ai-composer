@@ -17,7 +17,7 @@
    9. 插件卸载: StandardPlugin 拒绝（挂载 review）; DemoPlugin 允许（同包闭包）
   promote 分析:
   10. 预演: ReviewPlugin 移动/引用更新清单正确
-  11. 幂等: ExtractPlugin 已在 platform → already 分支
+  11. 框架插件拒绝: ExtractPlugin（aic 内, 只读）→ SystemExit
   12. 地基拒绝: --to apps → SystemExit
   13. 引用替换边界: 前缀 + .plugin 段保留; todo2 不误伤
  模拟项目集成（KIT_PROJECT_ROOT, 临时目录）:
@@ -31,9 +31,9 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.graph import build_graph
-from tools.promote import _replace_refs, promote
-from tools.uninstall import analyze_app_removal, analyze_plugin_removal
+from aic.tools.graph import build_graph
+from aic.tools.promote import _replace_refs, promote
+from aic.tools.uninstall import analyze_app_removal, analyze_plugin_removal
 
 PASS: list[str] = []
 FAIL: list[str] = []
@@ -58,8 +58,9 @@ def _base_of(path: str) -> str:
 
 def t01_graph_data() -> None:
     g = build_graph()
-    check("t01 应用 5 个", len(g["apps"]) == 5
-          and set(g["apps"]) == {"mvp", "review", "todo", "file_convert", "hello_aic"})
+    check("t01 应用 4 个（用户空间; hello_aic 在 aic 框架内）",
+          len(g["apps"]) == 4
+          and set(g["apps"]) == {"mvp", "review", "todo", "file_convert"})
     check("t01 插件 ≥ 18", len(g["plugins"]) >= 18)
     check("t01 keys 含 todos/converter（AnnAssign 支持）",
           "todos" in g["keys"] and "converter" in g["keys"])
@@ -147,10 +148,14 @@ def t10_promote_dry_run() -> None:
     check("t10 引用更新 > 0", len(rep["refs"]) > 0)
 
 
-def t11_promote_idempotent() -> None:
+def t11_promote_framework_guard() -> None:
+    """框架插件（aic 内）只读: 上浮应拒绝（上浮只对用户空间插件）。"""
     g = build_graph()
-    rep = promote(_ROOT, g, "ExtractPlugin", "platform", dry=True)
-    check("t11 ExtractPlugin 已在目标位 → already", rep["already"])
+    try:
+        promote(_ROOT, g, "ExtractPlugin", "platform", dry=True)
+        check("t11 框架插件上浮 → 拒绝", False)
+    except SystemExit as e:
+        check("t11 框架插件上浮 → 拒绝（aic 只读）", "框架插件" in str(e))
 
 
 def t12_promote_ground_guard() -> None:
@@ -197,7 +202,7 @@ def _make_mock_project(base: str) -> str:
     with open(os.path.join(biz, "__init__.py"), "w", encoding="utf-8") as fh:
         fh.write('"""x"""\n')
     with open(os.path.join(biz, "plugin.py"), "w", encoding="utf-8") as fh:
-        fh.write("from kernel import Plugin\n"
+        fh.write("from aic.kernel import Plugin\n"
                  "class TodoPlugin(Plugin):\n"
                  '    provides: list[str] = ["todos"]\n'
                  "    def apply(self, ctx):\n        pass\n")
@@ -256,10 +261,10 @@ def t15_mock_graph_public() -> None:
                 os.environ["KIT_PROJECT_ROOT"] = old
 
 
-# ── 模板提取（tools.template）──────────────────────
+# ── 模板提取（aic.tools.template）──────────────────────
 
 def t16_template_dry_run() -> None:
-    from tools.template import build_template
+    from aic.tools.template import build_template
     g = build_graph()
     rep = build_template(_ROOT, g, os.path.join(_ROOT, "tmp-tpl"), dry=True,
                          src_app="review")
@@ -269,18 +274,21 @@ def t16_template_dry_run() -> None:
 
 
 def t17_template_extract() -> None:
-    from tools.template import build_template
+    from aic.tools.template import build_template
     g = build_graph()
     out = os.path.join(tempfile.mkdtemp(), "tpl")
     try:
         rep = build_template(_ROOT, g, out, dry=False, src_app="review")
         check("t17 公共插件进模板", {"DbPlugin", "ExtractPlugin", "StandardPlugin"}
               <= set(rep["publics"]))
-        check("t17 kernel 复制", os.path.isdir(os.path.join(out, "kernel")))
-        check("t17 loops 引擎复制（shell 硬编码依赖）",
-              os.path.isdir(os.path.join(out, "extensions", "platform", "loops")))
+        check("t17 aic 框架复制（0.2.0: aic 整体）",
+              os.path.isdir(os.path.join(out, "aic", "kernel"))
+              and os.path.isdir(os.path.join(out, "aic", "tools")))
+        check("t17 loops 引擎在 aic 内（shell 硬编码依赖）",
+              os.path.isdir(os.path.join(out, "aic", "extensions", "platform", "loops")))
         check("t17 示例壳 hello_aic", os.path.isdir(os.path.join(out, "apps", "hello_aic")))
-        check("t17 公共插件包复制", os.path.isdir(os.path.join(out, "extensions", "platform", "extract")))
+        check("t17 公共插件包复制（aic 平台 + 项目平台）",
+              os.path.isdir(os.path.join(out, "aic", "extensions", "platform", "extract")))
         check("t17 自检脚本生成", os.path.isfile(os.path.join(out, "test", "template_check.py")))
         req = open(os.path.join(out, "requirements.txt"), encoding="utf-8").read()
         check("t17 requirements 自动生成", "fastapi>=0.110" in req
@@ -302,18 +310,18 @@ def t17_template_extract() -> None:
 
 def t18_template_self_check() -> None:
     """模板自检脚本内容: 壳契约 + hello_aic 装配断言。"""
-    from tools.template import _TEMPLATE_CHECK
+    from aic.tools.template import _TEMPLATE_CHECK
     check("t18 自检含壳布局存在性", "check_shell_layout" in _TEMPLATE_CHECK)
     check("t18 自检含内容 AST", "check_shell_content" in _TEMPLATE_CHECK)
     check("t18 自检含装配", "build_shell()" in _TEMPLATE_CHECK)
 
 
-# ── 能力清单（tools.caps）────────────────────────
+# ── 能力清单（aic.tools.caps）────────────────────────
 
 def _caps_output(root: str) -> tuple[int, str]:
     import io
     from contextlib import redirect_stdout
-    from tools.caps import caps
+    from aic.tools.caps import caps
     buf = io.StringIO()
     with redirect_stdout(buf):
         rc = caps(root)
@@ -339,7 +347,7 @@ def t20_caps_broken_module() -> None:
             "extensions/platform/__init__.py": '"""platform"""\n',
             "extensions/platform/broken/__init__.py": "raise ImportError('boom')\n",
             "extensions/platform/ok/__init__.py":
-                "from kernel import Plugin\n"
+                "from aic.kernel import Plugin\n"
                 "class OkPlugin(Plugin):\n"
                 "    provides = ['okSvc']\n"
                 "    def apply(self, ctx):\n"
@@ -367,6 +375,17 @@ def t20_caps_broken_module() -> None:
         check("t20 坏模块有提示", "broken 不可导入" in out)
 
 
+def t21_import_aic() -> None:
+    """0.2.0 统一入口: import aic 与 aic.kernel 等价。"""
+    import aic
+    from aic.kernel import Context as KernelContext
+    check("t21 import aic 统一入口（版本/Context/boot）",
+          aic.__version__ == "0.2.0"
+          and aic.Context is KernelContext
+          and callable(aic.boot)
+          and callable(aic.check_bypass_imports))
+
+
 def main() -> None:
     t01_graph_data()
     t02_public_markers()
@@ -378,7 +397,7 @@ def main() -> None:
     t08_todo_uninstall()
     t09_plugin_removal()
     t10_promote_dry_run()
-    t11_promote_idempotent()
+    t11_promote_framework_guard()
     t12_promote_ground_guard()
     t13_ref_boundary()
     t14_mock_promote_flow()
@@ -388,6 +407,7 @@ def main() -> None:
     t18_template_self_check()
     t19_caps_real_repo()
     t20_caps_broken_module()
+    t21_import_aic()
     print(f"\nM7 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")
     if FAIL:
         sys.exit(1)

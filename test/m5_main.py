@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kernel import Context, Plugin, boot, blast_radius, direct_dependents
+from aic.kernel import Context, Plugin, boot, blast_radius, direct_dependents
 
 PASS: list[str] = []
 FAIL: list[str] = []
@@ -92,7 +92,7 @@ def t04_real_plugins() -> None:
     from extensions.business.file_convert import FileConvertPlugin
     from extensions.business.hello import HelloPlugin
     from extensions.business.todo import TodoPlugin
-    from extensions.platform.base import StoragePlugin
+    from aic.extensions.platform.base import StoragePlugin
 
     ctx = Context()
     boot(ctx, [StoragePlugin(), HelloPlugin(), TodoPlugin(), FileConvertPlugin()])

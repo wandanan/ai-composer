@@ -16,8 +16,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from kernel import Context
-from extensions.platform.session.artifacts import list_artifacts
+from aic.kernel import Context
+from aic.extensions.platform.session.artifacts import list_artifacts
 from apps.mvp.shell import build_shell
 from apps.mvp.tasks import TASK_REVISE, TASK_RUN_PIPELINE, make_inline_tasks
 

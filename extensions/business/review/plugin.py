@@ -6,7 +6,7 @@ provides: tasks(任务) / review(核心服务) / reviewPipeline(流程) / knowle
 """
 from __future__ import annotations
 
-from kernel import Context, Plugin
+from aic.kernel import Context, Plugin
 
 import extensions.business.review.tools  # noqa: F401  — 触发 hermes 工具注册
 

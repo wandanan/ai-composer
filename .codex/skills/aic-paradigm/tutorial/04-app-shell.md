@@ -49,10 +49,10 @@ def build_shell() -> Context:
     # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
     # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
     if shell.get("config").get("llm", {}).get("LLM_API_KEY"):
-        from extensions.platform.loops import OpenAIEnginePlugin
+        from aic.extensions.platform.loops import OpenAIEnginePlugin
         plugins = PLUGINS + [OpenAIEnginePlugin()]
     else:
-        from extensions.platform.loops import FakeLoop
+        from aic.extensions.platform.loops import FakeLoop
         shell.register("agentLoop", FakeLoop(name="my_app-fake"))
         plugins = PLUGINS
 
@@ -108,7 +108,7 @@ async def add_todo(req: TodoReq):
 ① 存在性检查:  装配组 5 文件必须齐全（tasks/worker 空档位也算）
                入口组至少一个（main.py/cli.py）
                config/ 必须为目录
-② 内容检查:    壳内自定义 .py 不得 import extensions.*（直接拿实现）、
+② 内容检查:    壳内自定义 .py 不得 import aic.extensions.*（直接拿实现）、
                不得定义 Plugin 子类、不得调用 register/emit/effect（接线动作）
 ```
 

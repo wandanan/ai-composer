@@ -2,6 +2,26 @@
 
 开发时用到的全部 API 一览——写插件/壳直接查表，**无需读 kernel/ 源码**（kernel 可能来自 pip 包 site-packages，API 以本参考为准）。
 
+## 0. 统一入口（0.2.0 命名空间重构）
+
+框架包全部在 `aic/` 下（`aic.kernel` / `aic.extensions.platform` / `aic.tools` /
+`aic.apps.hello_aic`）；**用户业务平铺项目根**（`apps/` + `extensions/business/`）——
+安装包只装 aic，顶层命名冲突根治（0.1.x 的平铺 kernel/extensions/apps/tools 是旧形态）。
+
+```python
+import aic
+aic.__version__                                   # "0.2.0"
+from aic import Context, boot, Plugin             # 统一入口（与 aic.kernel 等价）
+from aic.extensions.platform.base import StoragePlugin      # 平台插件
+from aic.extensions.platform.loops import OpenAIEnginePlugin  # 引擎
+from apps.my_app.profile import PLUGINS           # 用户应用（平铺）
+from extensions.business.my_app import MyAppPlugin          # 用户业务插件（平铺）
+```
+
+**平台两层**：`aic/extensions/platform`（框架平台，只读——内置插件）与项目根
+`extensions/platform`（项目平台——`aic promote` 上浮目标，可写）。caps/graph
+把两处合并展示。
+
 ## 1. 内核（kernel 包）
 
 ### Context（ctx）
@@ -262,7 +282,7 @@ async def create_discussion(req: DiscussReq):
 
 ```python
 # extensions/business/chat/plugin.py
-from kernel import Context, Plugin
+from aic.kernel import Context, Plugin
 
 class ChatService:
     """① 能力: 服务类（AI 驱动时用 AgentTask, 见 §2）。"""
@@ -294,7 +314,7 @@ class ChatPlugin(Plugin):
 
 ```python
 # extensions/business/roundtable/plugin.py
-from kernel import Context, Plugin, EventMode
+from aic.kernel import Context, Plugin, EventMode
 
 ROLE_PROMPTS = {                      # 角色定义: 系统提示词走 **kw（引擎是"哑的"）
     "A": "你是甲方代表, 立场: 控制成本。",
@@ -407,7 +427,7 @@ close()    释放引擎资源
 
 ```python
 # extensions/platform/loops/myengine/__init__.py —— 仿 openai 适配器
-from kernel import Context, Plugin
+from aic.kernel import Context, Plugin
 
 class MyEngineLoop:
     name = "myengine"
@@ -447,9 +467,10 @@ class MyEnginePlugin(Plugin):                      # 与 OpenAIEnginePlugin 同�
 
 "黑箱之间藏了多少未知依赖"由结构机制回答（inject 声明 / graph / blast_radius / 装配期校验），
 **旁路 import 是最后一道结构约束**：业务代码绕过 ctx 直接 import 其他扩展的实现/组件
-（如 `from extensions.platform.base.storage import LocalStorage`）——换实现时它还继续生效，
+（如 `from aic.extensions.platform.base.storage import LocalStorage`）——换实现时它还继续生效，
 契约被悄悄绕过。`kernel/imports.py` 的 `check_bypass_imports` 在每次装配（build_shell）时
-扫描 apps/ 与 extensions/ 的跨盒 import，违规直接报错（`[kernel]` 前缀，收集式，sorted 确定性）。
+扫描**三区**（根 `apps/` + 根 `extensions/` + 框架 `aic/extensions/`）的跨盒 import，
+违规直接报错（`[kernel]` 前缀，收集式，sorted 确定性）。
 
 ### 三类合法跨盒 import
 

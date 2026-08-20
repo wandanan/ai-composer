@@ -7,7 +7,7 @@
 安装包自带示例应用 `hello_aic`——它挂载了全部公共插件（配置、存储、缓存、队列、数据库、沙箱、SSE、文档提取），是一个开箱即用的 AI 应用地基。
 
 ```bash
-uvicorn apps.hello_aic.main:app --port 8000
+uvicorn aic.apps.hello_aic.main:app --port 8000
 ```
 
 浏览器访问 `http://127.0.0.1:8000/health`：

@@ -22,13 +22,13 @@ import sys
 
 HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 
-from kernel import Context, EventMode, boot
-from extensions.platform.loops import FakeLoop
-from extensions.platform.loops.hermes import HermesLoop
-from extensions.platform.security.sandbox import SandboxPlugin
-from extensions.platform.session import SessionPlugin
-from extensions.platform.session.artifacts import list_artifacts
-from extensions.platform.render import RenderPlugin
+from aic.kernel import Context, EventMode, boot
+from aic.extensions.platform.loops import FakeLoop
+from aic.extensions.platform.loops.hermes import HermesLoop
+from aic.extensions.platform.security.sandbox import SandboxPlugin
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.session.artifacts import list_artifacts
+from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.pipeline import WriterPipeline
 from extensions.business.writer.task import OUTLINE_REPLY

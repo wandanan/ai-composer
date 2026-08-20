@@ -10,7 +10,7 @@
 """
 import json
 
-from kernel import Context, Plugin
+from aic.kernel import Context, Plugin
 
 
 class TodoService:

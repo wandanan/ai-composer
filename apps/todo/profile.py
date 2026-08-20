@@ -1,12 +1,12 @@
-"""apps/todo/profile.py — 插件组合（tools.init 生成）。
+"""apps/todo/profile.py — 插件组合（aic.tools.init 生成）。
 
 应用壳的组装点: 平台插件 + 你的业务插件。
 """
-from extensions.platform.base import CachePlugin, ConfigPlugin, JobsPlugin, StoragePlugin, TelemetryPlugin
-from extensions.platform.render import RenderPlugin
-from extensions.platform.security import SandboxPlugin
-from extensions.platform.session import SessionPlugin
-from extensions.platform.stream import StreamPlugin
+from aic.extensions.platform.base import CachePlugin, ConfigPlugin, JobsPlugin, StoragePlugin, TelemetryPlugin
+from aic.extensions.platform.render import RenderPlugin
+from aic.extensions.platform.security import SandboxPlugin
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.stream import StreamPlugin
 from extensions.business.todo import TodoPlugin
 
 PLUGINS = [
