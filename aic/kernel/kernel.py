@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 from enum import StrEnum
 from typing import Any, Callable
 
+from .events import EVENT_REGISTRY
+
 
 class EventMode(StrEnum):
     """事件派发模式（dsh 四种模式的 Python 版）。"""
@@ -54,6 +56,7 @@ class Context:
     def __init__(self, parent: "Context | None" = None):
         self._services: dict[str, Any] = {}
         self._listeners: dict[str, dict] = {}   # event -> {mode, handlers[]}
+        self._event_registry: dict[str, dict] = dict(EVENT_REGISTRY)  # event -> {payload: set}
         self._effects: list[Disposer] = []      # 平台层效果（非插件挂载时注册的）
         self._parent = parent
         self._current_bucket: list[Disposer] | None = None
@@ -108,8 +111,34 @@ class Context:
         self.effect(_dispose)
         return _dispose
 
+    def register_event(self, name: str, payload_fields: set[str] | tuple[str, ...] | None = None,
+                       mode: EventMode = EventMode.EMIT) -> None:
+        """声明事件契约（事件注册表）: 未登记事件 emit 时报错。
+
+        内核预登记引擎协议事件（llm/stream 等）; 业务事件由插件 apply 声明——
+        全局生效（一次登记, 处处 emit）。payload_fields 为允许的字段集
+        （emit 的 payload 超集 → RuntimeError; 缺字段不报——可选语义）。
+        mode 仅文档/查询用（派发模式一致性由 on 首注册锁定管）。
+        """
+        self._event_registry[name] = {
+            "payload": set(payload_fields or ()), "mode": mode}
+
     def emit(self, event: str, payload: Any = None) -> Any:
-        """按事件声明的模式派发，返回最终 payload（waterfall/serial 可被改写）。"""
+        """按事件声明的模式派发，返回最终 payload（waterfall/serial 可被改写）。
+
+        事件契约校验（大声失败）: 未登记事件 / payload 含未声明字段 → RuntimeError。
+        """
+        spec = self._event_registry.get(event)
+        if spec is None:
+            raise RuntimeError(
+                f"[kernel] 事件未登记: {event!r}"
+                f"（先 ctx.register_event 声明; 已登记: {sorted(self._event_registry)}）")
+        if isinstance(payload, dict) and spec["payload"]:
+            extra = set(payload) - spec["payload"]
+            if extra:
+                raise RuntimeError(
+                    f"[kernel] 事件 {event!r} payload 含未声明字段: {sorted(extra)}"
+                    f"（声明字段: {sorted(spec['payload'])}）")
         slot = self._listeners.get(event)
         if not slot or not slot["handlers"]:
             return payload

@@ -1,4 +1,4 @@
-"""review/convert_to_pdf.py — Word→PDF 转换（从原项目 doc_extract/converter.py 移植）。
+"""aic/extensions/platform/extract/convert_to_pdf.py — Word→PDF 转换（从原项目 doc_extract/converter.py 移植）。
 
 策略（按平台）:
   Windows:  优先 docx2pdf (MS Word COM), 回退 LibreOffice --headless

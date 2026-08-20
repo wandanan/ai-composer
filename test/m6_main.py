@@ -486,6 +486,23 @@ def t28_bypass_review_excluded() -> None:
             check("t28 review 业务线整体排除扫描", False)
 
 
+def t30_stream_bridge() -> None:
+    """StreamPlugin 通道化（0.2.1）: 平台不认识业务事件, 桥接由业务声明。"""
+    from aic.kernel import Context, boot
+    from aic.extensions.platform.stream import StreamPlugin
+    app = Context()
+    boot(app, [StreamPlugin()])
+    svc = app.get("stream")
+    check("t30 StreamPlugin 零业务预置桥接", "pipeline/phase" not in app._listeners)
+    app.register_event("my/progress", {"session_id", "pct"})
+    svc.bridge("my/progress")
+    q, _ = svc.subscribe("s1")
+    app.emit("my/progress", {"session_id": "s1", "pct": 50})
+    got = q.get(timeout=1)
+    check("t30 业务声明桥接生效（SSE 收到事件）",
+          got["event"] == "my/progress" and got["data"]["session_id"] == "s1")
+
+
 def t29_bypass_deterministic() -> None:
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
@@ -536,6 +553,7 @@ def main() -> None:
     t27_bypass_relative_escape()
     t28_bypass_review_excluded()
     t29_bypass_deterministic()
+    t30_stream_bridge()
     print(f"\nM6 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")
     if FAIL:
         sys.exit(1)

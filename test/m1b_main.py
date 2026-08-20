@@ -28,7 +28,7 @@ HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 from aic.kernel import Context, EventMode, boot
 from aic.extensions.platform.loops import FakeLoop
 from aic.extensions.platform.loops.hermes import HermesEnginePlugin, HermesLoop
-from aic.kernel.protocols import AgentLoop
+from aic.extensions.platform.loops import AgentLoop
 from aic.extensions.platform.session import SessionPlugin
 from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin

@@ -12,7 +12,7 @@ import csv
 import io
 import json
 
-from aic.kernel import Context, Plugin
+from aic.kernel import Context, Plugin, ServiceNotFound
 from aic.extensions.platform.session.artifacts import save_artifact
 
 
@@ -68,3 +68,10 @@ class FileConvertPlugin(Plugin):
     def apply(self, ctx: Context):
         ctx.register("converter", ConverterService())
         ctx.register("convertPipeline", ConvertPipeline(ctx))
+
+        # 事件契约（0.2.1 事件注册表）: 业务事件声明 + SSE 桥接
+        ctx.register_event("convert/done", {"session_id", "output"})
+        try:
+            ctx.get("stream").bridge("convert/done")
+        except ServiceNotFound:
+            pass

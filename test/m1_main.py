@@ -17,7 +17,7 @@ import os
 
 from aic.kernel import Context, boot
 from aic.extensions.platform.loops import FakeLoop
-from aic.kernel.protocols import AgentLoop
+from aic.extensions.platform.loops import AgentLoop
 from aic.extensions.platform.session import SessionPlugin
 from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin

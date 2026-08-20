@@ -1,7 +1,8 @@
-"""kit/protocols.py — 协议清单（M0 最小集）。
+"""aic.extensions.platform.agent — AI 任务协议包（0.2.1 内核零 AI）。
 
-协议 = 契约：接口签名 / 事件名 / 消息结构。实现可替换，契约稳定。
-设计依据: docs/design/kernel-design.md 第四节。
+AI 业务协议的归宿: 与 base/session/extract 等平台能力并列, 不进内核——
+内核 = 纯机制（不认识 AI 也不认识业务）。AI 业务插件实现这些协议形状即可,
+无需继承（runtime_checkable 结构校验）。
 """
 from __future__ import annotations
 
@@ -61,22 +62,4 @@ class KnowledgeProvider(Protocol):
         ...
 
 
-@runtime_checkable
-class AgentLoop(Protocol):
-    """Agent 引擎协议：hermes / 假引擎 / 未来任何引擎实现它，经 ctx.agentLoop 接入。
-
-    消费者纪律: 每次调用时 ctx.get("agentLoop")，不缓存引用 → 引擎可任意替换。
-    """
-
-    def run_conversation(
-        self,
-        user_message: str,
-        conversation_history: list | None = None,
-        **kw: Any,
-    ) -> dict:
-        """执行一轮对话，返回 {final_response, messages, token_usage, ...}。"""
-        ...
-
-    def close(self) -> None:
-        """释放引擎资源。"""
-        ...
+__all__ = ["AgentTask", "KnowledgeProvider", "Phase", "ToolHandler"]

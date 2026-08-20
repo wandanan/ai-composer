@@ -1,6 +1,6 @@
 """extensions/platform/loops/openai/ — OpenAI 兼容引擎适配器（发布包内置真引擎）。
 
-实现 AgentLoop 协议（kernel.protocols.AgentLoop）:
+实现 AgentLoop 协议（aic.extensions.platform.loops.AgentLoop）:
   run_conversation(user_message, conversation_history=None, **kw) -> dict
     - system_prompt / toolsets 走 **kw（协议约定: 引擎是"哑的", 不组装业务 prompt）
     - session_id 走 **kw: 流式 delta 事件 payload 携带它（事件契约: 须带 session_id）

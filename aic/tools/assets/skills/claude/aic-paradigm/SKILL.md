@@ -20,7 +20,11 @@ description: AIComposer 范式开发 Skill——约束、规范、最佳实践�
 
 **纪律核心**：业务逻辑永远在插件里，壳只做组合。
 **跨盒纪律**：消费方永不 import 实现（走 ctx 服务）; 组合面（*Plugin / loops 包 / profile.py
-组合点）与声明工具（extract、session.artifacts）豁免——旁路 import 装配期报错（kernel/imports.py）。
+组合点）、协议面（aic.extensions.platform.agent / .loops 协议包）与声明工具
+（extract、session.artifacts）豁免——旁路 import 装配期报错（kernel/imports.py）。
+**事件契约（0.2.1）**：事件先登记再 emit——业务插件 apply 里 `ctx.register_event(name, fields)`
+声明（未登记 emit 报错、payload 超集报错）; SSE 桥接由业务声明
+`ctx.get("stream").bridge(event)`（StreamPlugin 是通用通道, 不认识业务事件）。
 
 ## 命令速查（aic 六命令）
 

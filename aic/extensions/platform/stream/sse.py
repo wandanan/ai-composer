@@ -27,7 +27,9 @@ class StreamService:
     解决"任务快于订阅建立"的丢事件问题（原审查应用的重连回放同思路）。
     """
 
-    def __init__(self, redis_url: str | None = None, history_limit: int = 200):
+    def __init__(self, ctx: Context | None = None, redis_url: str | None = None,
+                 history_limit: int = 200):
+        self._ctx = ctx
         self.redis_url = redis_url
         self._subs: dict[str, list[queue.Queue]] = {}
         self._history: dict[str, list[dict]] = {}
@@ -37,6 +39,17 @@ class StreamService:
     @property
     def redis_enabled(self) -> bool:
         return bool(self.redis_url)
+
+    def bridge(self, event_name: str) -> None:
+        """业务声明: 事件 → 会话推送（0.2.1 平台通道化——StreamPlugin 不认识业务事件）。
+
+        payload 须携带 session_id（否则 publish 警告跳过）。由业务插件 apply 调用。
+        """
+        if self._ctx is None:
+            raise RuntimeError("[stream] bridge 需要 ctx（StreamPlugin 构造注入）")
+        self._ctx.on(event_name,
+                     lambda p: self.publish(p.get("session_id", ""), event_name, p),
+                     EventMode.EMIT)
 
     # ── 订阅（SSE 端点侧）──
 
@@ -85,7 +98,11 @@ class StreamService:
 
 
 class StreamPlugin(Plugin):
-    """SSE 推送插件：提供 ctx.stream + 桥接内核事件。"""
+    """SSE 推送插件：提供 ctx.stream + 通用事件桥接（0.2.1 平台通道化）。
+
+    StreamPlugin 不认识任何具体事件名——桥接由业务插件声明
+    （`ctx.get("stream").bridge("pipeline/phase")`）; 平台零业务耦合。
+    """
 
     provides = ["stream"]
 
@@ -93,16 +110,5 @@ class StreamPlugin(Plugin):
         self._redis_url = redis_url
 
     def apply(self, ctx: Context):
-        svc = StreamService(self._redis_url)
+        svc = StreamService(ctx, self._redis_url)
         ctx.register("stream", svc)
-
-        # 内核事件 → 会话推送（事件协议携带 session_id）
-        ctx.on("pipeline/phase",
-               lambda p: svc.publish(p.get("session_id", ""), "pipeline/phase", p),
-               EventMode.EMIT)
-        ctx.on("chapter/status",
-               lambda p: svc.publish(p.get("session_id", ""), "chapter/status", p),
-               EventMode.EMIT)
-        ctx.on("pipeline/done",
-               lambda p: svc.publish(p.get("session_id", ""), "pipeline/done", p),
-               EventMode.EMIT)

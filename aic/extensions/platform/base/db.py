@@ -2,7 +2,7 @@
 
 ctx.db: SQLAlchemy 引擎 + 会话工厂 + 建表。
 - sqlite 默认（WAL + busy_timeout, 本地可跑）
-- MySQL 用 URL 切换（KIT_DATABASE_URL 或 REVIEW_DATABASE_URL 兼容）
+- MySQL 用 URL 切换（KIT_DATABASE_URL）
 业务插件的表结构（自己的 Base）通过 ctx.db.create_all(base) 建表。
 """
 from __future__ import annotations
@@ -16,9 +16,7 @@ from aic.kernel import Context, Plugin
 
 
 def database_url() -> str:
-    return os.environ.get(
-        "KIT_DATABASE_URL",
-        os.environ.get("REVIEW_DATABASE_URL", "sqlite:///review.db"))
+    return os.environ.get("KIT_DATABASE_URL", "sqlite:///aic.db")
 
 
 class DbService:

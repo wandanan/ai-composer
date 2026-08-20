@@ -168,7 +168,7 @@ def main() -> int:
 
     print("\n[9] OpenAI 兼容引擎适配器（装配, 不调真实 API）")
     from aic.extensions.platform.loops import OpenAIEnginePlugin
-    from aic.kernel.protocols import AgentLoop
+    from aic.extensions.platform.loops import AgentLoop
     eng = Context()
     eng.register("config", {"llm": {"LLM_MODEL": "test-model",
                                     "LLM_API_KEY": "test-key",

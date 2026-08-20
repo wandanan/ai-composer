@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from aic.kernel.protocols import Phase
+from aic.extensions.platform.agent import Phase
 
 from extensions.business.review.security import PromptGuard, ToolPolicy
 

@@ -32,7 +32,8 @@ from extensions.business.my_app import MyAppPlugin          # 用户业务插件
 | get | `get(key) -> Any` | 按 key 取服务；未注册抛 `ServiceNotFound` |
 | has | `has(key) -> bool` | key 是否已注册 |
 | on | `on(event, handler, mode=EMIT) -> Disposer` | 注册事件监听；模式由首次注册决定，之后必须一致 |
-| emit | `emit(event, payload=None) -> Any` | 按事件声明的模式派发；waterfall/serial 返回加工后 payload |
+| emit | `emit(event, payload=None) -> Any` | 按事件声明的模式派发；waterfall/serial 返回加工后 payload；**事件契约校验**（0.2.1）：未登记事件 / payload 超集声明字段 → RuntimeError |
+| register_event | `register_event(name, payload_fields=None, mode=EMIT)` | 声明事件契约（0.2.1）：业务插件 apply 里登记；内核预登记引擎事件（llm/stream 等 5 个）；一次登记全局生效 |
 | mount | `mount(plugin) -> PluginMount` | 挂载插件：apply 效果入桶 + 能力面校验 |
 | unmount | `unmount(mount)` | 逆序撤销该插件全部效果，零残留 |
 | effect | `effect(disposer)` | 注册可逆效果（挂载期间自动入插件桶） |
@@ -72,7 +73,14 @@ apply 注册了 provides 未声明的 key   → 未声明注册（偷偷提供�
 provides 声明了但 apply 没注册       → 声明未注册（承诺不兑现）
 ```
 
-## 2. 协议（kernel.protocols）
+## 2. 协议（0.2.1 内核零 AI: AI 协议归宿平台层）
+
+内核 = 纯机制，**不承载任何 AI 协议**。协议按能力域内聚：
+
+```
+引擎协议   from aic.extensions.platform.loops import AgentLoop     （跟引擎实现同包）
+AI 任务协议 from aic.extensions.platform.agent import AgentTask, Phase, ToolHandler, KnowledgeProvider
+```
 
 ### AgentTask（一个业务 = 一个任务，实现协议形状即可，无需继承）
 
@@ -115,7 +123,7 @@ AgentLoop        run_conversation(user_message, conversation_history=None, **kw)
 | db | `DbPlugin(url=None)` | `engine` / `session()`（SQLAlchemy Session）/ `create_all(base)`；模块函数 `database_url() -> str` |
 | sessions | `SessionPlugin(runtime_dir=None)` | `create_session(meta=None) -> Session` / `get(session_id)` / `attach(session_id, meta=None)`（跨进程重建）/ `start_turn(session) -> int`；Session 字段：`session_id` / `dir`（工作区）/ `meta` / `turn`；多机部署 `runtime_dir` 传共享目录 |
 | renderers | `RenderPlugin()` | `register(renderer)` / `get(name)` / `has(name)` / `names()`；渲染器协议：`name` + `render(session, *, merged, outline, version, **kw) -> 输出文件名` |
-| stream | `StreamPlugin(redis_url=None)` | `subscribe(session_id) -> (实时队列, 事件快照)` / `unsubscribe(session_id, q)` / `publish(session_id, event, data)`；`redis_enabled`（跨进程走 Redis pub/sub） |
+| stream | `StreamPlugin(redis_url=None)` | `subscribe(session_id) -> (实时队列, 事件快照)` / `unsubscribe(session_id, q)` / `publish(session_id, event, data)` / `bridge(event_name)`（业务声明事件→SSE 桥接）；`redis_enabled`（跨进程走 Redis pub/sub） |
 | sandbox | `SandboxPlugin()` | `set_workspace/get_workspace/clear_workspace` / `lock_dir_readonly(path)` / `unlock_dir(path)` / `sanitize_filename(filename, max_length=200)` |
 | extract | `ExtractPlugin(impl=None)` | `extract(content, filename, use_ocr=False, progress_callback=None, **kw) -> str`；模块函数 `extract_document(...)`；LocalExtractor 支持 docx/pdf/MinerU |
 | agentLoop | `FakeLoop(name, replies, delay)`（无配置默认）/ `OpenAIEnginePlugin()`（配好 `LLM_API_KEY` 即真引擎） | AgentLoop 协议（见 §2）；换引擎 = 换提供 agentLoop 的插件（见 §8） |
@@ -214,9 +222,8 @@ def run_chat(session_id: str): ...
 
 ### SSE 进度推送（完整可照抄）
 
-**事件 → SSE 接线规则**：`StreamPlugin` 只自动桥接三个内核事件
-（`pipeline/phase`、`chapter/status`、`pipeline/done`，payload 须带 `session_id`）。
-**业务自定义事件要自己接线**——在业务插件 `apply` 里注册桥接：
+**事件 → SSE 接线规则**（0.2.1 起）：`StreamPlugin` 是**通用通道**——不认识任何业务事件
+（平台零业务耦合）。**事件先登记、桥接由业务声明**——业务插件 `apply` 里两步：
 
 ```python
 class MyPlugin(Plugin):
@@ -224,10 +231,10 @@ class MyPlugin(Plugin):
     provides = ["my"]
 
     def apply(self, ctx: Context):
-        svc = ctx.get("stream")
-        # 业务事件 → 会话推送（payload 必须携带 session_id）
-        ctx.on("my/progress", lambda p: svc.publish(
-            p.get("session_id", ""), "my/progress", p), EventMode.EMIT)
+        # ① 事件契约登记（未登记事件 emit 时 RuntimeError——大声失败）
+        ctx.register_event("my/progress", {"session_id", "pct"})
+        # ② 声明桥接: 事件 → 会话推送（payload 必须携带 session_id）
+        ctx.get("stream").bridge("my/progress")
         ctx.register("my", MyService(...))
 ```
 
@@ -497,6 +504,9 @@ UTILITY_MODULES = (
 
 > **新增公共工具** = 改 `kernel/imports.py` 白名单 + 同步本文档（声明强制显式，不允许静默旁路）。
 > 有 ctx 服务的能力（storage/cache/jobs/agentLoop/extract 服务形态）**不走白名单**——走 `ctx.get`。
+
+**协议面豁免**（0.2.1）：业务插件 import 平台协议（`aic.extensions.platform.agent` /
+`aic.extensions.platform.loops` 协议包）合法——实现协议必须 import 形状，契约面不算旁路。
 
 ### 边界
 

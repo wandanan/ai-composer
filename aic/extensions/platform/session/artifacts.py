@@ -44,8 +44,11 @@ def list_artifacts(session_dir: str, kind: str) -> list[str]:
     return sorted(os.listdir(d))
 
 
-def next_draft_version(session_dir: str, kind: str = "merged",
-                       prefix: str = "draft_v", suffix: str = ".md") -> int:
-    """下一个版本号 = 现有版本数 + 1（版本只增不删，历史保留）。"""
+def next_draft_version(session_dir: str, kind: str, prefix: str,
+                       suffix: str = ".md") -> int:
+    """下一个版本号 = 现有版本数 + 1（版本只增不删，历史保留）。
+
+    0.2.1: kind/prefix 必填（业务侧显式传——平台不默认任何业务产物命名惯例）。
+    """
     return len([n for n in list_artifacts(session_dir, kind)
                 if n.startswith(prefix) and n.endswith(suffix)]) + 1

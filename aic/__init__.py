@@ -25,7 +25,7 @@ from .kernel import (
     check_shell_layout,
     direct_dependents,
 )
-from .kernel import __version__, imports, layout, protocols
+from .kernel import __version__, imports, layout
 
 __all__ = [
     "Context",

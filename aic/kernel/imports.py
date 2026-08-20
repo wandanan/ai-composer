@@ -45,8 +45,19 @@ UTILITY_MODULES = (
     "aic.extensions.platform.session.artifacts",
 )
 
-# 排除扫描的业务线（不进发布包, 卫生问题随业务线处理, 与 pyproject exclude 一致）
-_EXCLUDED_DIRS = ("apps/review", "extensions/business/review")
+# 项目级业务排除默认值（本仓库 review 业务线的豁免配置——卫生问题随业务线处理）;
+# 机制不依赖任何业务名: 可通过 check_bypass_imports(exclude=...) 或
+# 环境变量 KIT_EXCLUDED_DIRS（逗号分隔相对路径）覆盖
+_DEFAULT_EXCLUDED = ("apps/review", "extensions/business/review")
+
+
+def _resolve_exclude(exclude: tuple[str, ...] | None) -> tuple[str, ...]:
+    if exclude is not None:
+        return tuple(exclude)
+    env = os.environ.get("KIT_EXCLUDED_DIRS", "")
+    if env.strip():
+        return tuple(e.strip() for e in env.split(",") if e.strip())
+    return _DEFAULT_EXCLUDED
 
 
 def _own_root(rel: str) -> str | None:
@@ -145,6 +156,10 @@ def _scan_file(path: str, rel: str) -> list[str]:
             if target == "aic" or target == "aic.kernel" \
                     or target.startswith("aic.kernel."):
                 continue
+            # 协议面: agent/loops 协议包（业务实现协议必须 import 形状——与实现解耦的契约面）
+            if target.startswith(("aic.extensions.platform.agent",
+                                  "aic.extensions.platform.loops")):
+                continue
             # 自己根包内互 import → 放行
             if target == root or target.startswith(root + "."):
                 continue
@@ -163,13 +178,16 @@ def _scan_file(path: str, rel: str) -> list[str]:
     return problems
 
 
-def check_bypass_imports(project_root: str | os.PathLike) -> None:
+def check_bypass_imports(project_root: str | os.PathLike,
+                         exclude: tuple[str, ...] | None = None) -> None:
     """旁路 import 契约: 扫描 apps/ 与 extensions/ 下的跨盒 import。
 
     违规抛 RuntimeError（收集式, 全部问题一次列出, sorted 确定性）;
     通过静默返回。目录缺失（apps/ 或 extensions/ 不存在）→ 跳过该半区。
+    exclude: 豁免相对路径（逗号分隔环境变量 KIT_EXCLUDED_DIRS 可覆盖默认）。
     """
     project_root = os.path.abspath(project_root)
+    excluded = _resolve_exclude(exclude)
     problems: list[str] = []
     # 扫描三区: 根 apps/（壳）+ 根 extensions/（用户业务）+ aic/extensions/（框架）
     for base in ("apps", "extensions", os.path.join("aic", "extensions")):
@@ -183,7 +201,7 @@ def check_bypass_imports(project_root: str | os.PathLike) -> None:
                     continue
                 full = os.path.join(dirpath, f)
                 rel = os.path.relpath(full, project_root).replace(os.sep, "/")
-                if any(rel == e or rel.startswith(e + "/") for e in _EXCLUDED_DIRS):
+                if any(rel == e or rel.startswith(e + "/") for e in excluded):
                     continue
                 problems.extend(_scan_file(full, rel))
 

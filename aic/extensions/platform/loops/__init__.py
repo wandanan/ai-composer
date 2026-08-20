@@ -12,5 +12,6 @@
 from .failover_loop import FailoverLoop
 from .fake_loop import FakeLoop
 from .openai import OpenAIEnginePlugin, OpenAILoop
+from .protocols import AgentLoop
 
-__all__ = ["FakeLoop", "OpenAILoop", "OpenAIEnginePlugin", "FailoverLoop"]
+__all__ = ["AgentLoop", "FakeLoop", "OpenAILoop", "OpenAIEnginePlugin", "FailoverLoop"]

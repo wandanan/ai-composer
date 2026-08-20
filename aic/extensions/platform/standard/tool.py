@@ -1,4 +1,4 @@
-"""extensions/business/standard/tool.py — 本地规范库检索工具（领域共享）。
+"""aic/extensions/platform/standard/tool.py — 本地规范库检索工具（领域共享）。
 
 向本地检索 API 发 HTTP 查询，返回规范/标准条目（替代联网搜索）。
 review 与 writer 共享（原项目 standard 领域子插件）。
@@ -90,7 +90,7 @@ def _register() -> None:
             emoji="📚",
         )
     except ImportError:
-        logger.debug("[review] tools.registry 未安装（非 hermes 环境），跳过 standard_search 注册")
+        logger.debug("[standard] tools.registry 未安装（非 hermes 环境），跳过 standard_search 注册")
 
 
 _register()

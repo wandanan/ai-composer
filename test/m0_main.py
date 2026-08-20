@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from aic.kernel import Context, EventMode, ServiceNotFound, boot
-from aic.kernel.protocols import AgentTask
+from aic.extensions.platform.agent import AgentTask
 from extensions.business.demo import DemoPlugin, EchoPlugin
 from extensions.business.demo.plugin import Greeter
 
@@ -84,6 +84,20 @@ def main() -> int:
     app.emit("tasks/notify", "job")
     check("parallel 模式: 并发执行完成",
           sorted(parallel_results) == ["job-a", "job-b"], str(sorted(parallel_results)))
+
+    print("\n[4.5] 事件契约注册表 (0.2.1, 大声失败)")
+    try:
+        app.emit("no/such/event", {"x": 1})
+        check("未登记事件 → 报错", False)
+    except RuntimeError as e:
+        check("未登记事件 → RuntimeError", "事件未登记" in str(e))
+    try:
+        app.emit("app/started", {"sid": "s", "extra": 1})
+        check("payload 超集 → 报错", False)
+    except RuntimeError as e:
+        check("payload 含未声明字段 → RuntimeError", "未声明字段" in str(e))
+    app.emit("app/started", {"sid": "s"})
+    check("已登记事件 + 合规 payload 通过", True)
 
     print("\n[5] 同 key 覆盖替换 (实现可换)")
     replaced_disposer = app.register("greeter", Greeter("替换实现"))

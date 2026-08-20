@@ -88,7 +88,7 @@ def _collect_plugins(mod) -> list[dict]:
 
 def _collect_engines(mod) -> list[str]:
     """收集 loops 包内的引擎选择（AgentLoop 协议实现 + 引擎插件）。"""
-    from aic.kernel.protocols import AgentLoop
+    from aic.extensions.platform.loops import AgentLoop
     out = []
     for cls_name, cls in sorted(vars(mod).items()):
         if not isinstance(cls, type):
@@ -171,6 +171,11 @@ def caps(root: str | None = None) -> int:
     print("\n== 声明工具（纯函数 API, 可直接 import）==")
     for u in UTILITY_MODULES:
         print(f"  {u}")
+    print("\n== 事件协议（内核预登记; 业务事件由插件 register_event 声明）==")
+    from aic.kernel.events import EVENT_REGISTRY
+    for name, spec in sorted(EVENT_REGISTRY.items()):
+        fields = ", ".join(sorted(spec["payload"])) or "（无字段/任意）"
+        print(f"  {name:<20} payload: {fields}")
     print("\n== 引擎（agentLoop 实现选择）==")
     print(f"  {' / '.join(engines) if engines else '（无）'}")
     return 0

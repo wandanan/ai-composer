@@ -224,7 +224,7 @@ extensions/ 是 init 模板与推荐目录（一切皆插件, 除了地基谁都
   调用契约: 输入=meta, 输出=产物(文件)/数据(通道) —— 运行时概念, 非设计步骤
 """
 from aic.kernel import Context, Plugin
-from aic.kernel.protocols import AgentTask, Phase
+from aic.extensions.platform.agent import AgentTask, Phase
 
 
 class {Name}Task:

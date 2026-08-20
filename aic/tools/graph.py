@@ -204,7 +204,7 @@ def _scan_plugins(ext_dir: str, pkg_name: str | None = None) -> dict[str, dict]:
                     "methods": methods,
                     "public": _class_public(node),
                     # AI 插件 = 依赖 agentLoop（引擎驱动）或实现 AgentTask 形状
-                    # （build_system_prompt 等四方法, kernel/protocols.py）
+                    # （build_system_prompt 等四方法, aic.extensions.platform.agent）
                     # 或所在包含 AgentTask 类（AI 能力常在 task.py, 不在插件类自身）
                     "ai": "agentLoop" in inject
                           or "build_system_prompt" in methods

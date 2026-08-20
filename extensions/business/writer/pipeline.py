@@ -9,7 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from aic.kernel import Context, ServiceNotFound
-from aic.kernel.protocols import Phase
+from aic.extensions.platform.agent import Phase
 from aic.extensions.platform.session.artifacts import (
     list_artifacts,
     next_draft_version,
@@ -99,7 +99,7 @@ class WriterPipeline:
 
         # Phase 4 合并 + 一致性校验
         self._phase(session, "merge")
-        version = next_draft_version(sdir)
+        version = next_draft_version(sdir, "merged", "draft_v")
         merged = self._merge(loop, sdir, sp, ts)
         save_artifact(sdir, "merged", f"draft_v{version}.md", merged)
 
@@ -162,7 +162,7 @@ class WriterPipeline:
         self.ctx.emit("chapter/status", {"chapter": chapter_file, "status": "revised",
                                          "session_id": session.session_id})
 
-        version = next_draft_version(sdir)
+        version = next_draft_version(sdir, "merged", "draft_v")
         merged = self._merge(loop, sdir, sp, ts)
         save_artifact(sdir, "merged", f"draft_v{version}.md", merged)
 

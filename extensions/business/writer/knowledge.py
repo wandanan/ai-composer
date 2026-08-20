@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 
-from aic.kernel.protocols import KnowledgeProvider
+from aic.extensions.platform.agent import KnowledgeProvider
 
 _RESOURCES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources")
 

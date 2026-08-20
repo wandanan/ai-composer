@@ -33,15 +33,16 @@ class DocxRenderer:
     def __init__(self, style: dict | None = None):
         self.style = style or TEMPLATE_STYLE
 
-    def render(self, session, *, merged: str, outline: str,
-               version: int, **kw) -> str:
+    def render(self, session, *, version: int, **artifacts: str) -> str:
         doc = Document()
 
         # 页眉
         header = doc.sections[0].header
         header.paragraphs[0].text = self.style.get("header_text", "")
 
-        # 大纲在前（标题页）, 合并稿在后
+        # 业务产物按名取（0.2.1 泛化协议: **artifacts）: 大纲在前（标题页）, 合并稿在后
+        outline = artifacts.get("outline", "")
+        merged = artifacts.get("merged", "")
         self._add_md(doc, outline)
         doc.add_page_break()
         self._add_md(doc, merged)

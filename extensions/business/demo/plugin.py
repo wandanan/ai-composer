@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from aic.kernel import Context, EventMode, Plugin
-from aic.kernel.protocols import AgentTask, Phase
+from aic.extensions.platform.agent import AgentTask, Phase
 
 
 class Greeter:
@@ -52,6 +52,13 @@ class DemoPlugin(Plugin):
         cfg = ctx.get("config")
         ctx.register("greeter", Greeter(f"demo-plugin[{cfg.get('mode', '?')}]"))
         ctx.register("tasks", {DemoTask.id: DemoTask()})
+
+        # 事件契约（0.2.1 事件注册表）: 演示事件声明（render/path 与 tasks/notify 为字符串 payload）
+        for evt, fields in (("app/started", {"sid"}),
+                            ("prompt/build", {"section", "sections"}),
+                            ("render/path", set()),
+                            ("tasks/notify", set())):
+            ctx.register_event(evt, fields)
 
         # 观察型监听: emit 模式
         def _on_started(payload):

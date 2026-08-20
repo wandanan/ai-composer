@@ -336,6 +336,7 @@ def t19_caps_real_repo() -> None:
     check("t19 平台服务 key（storage/agentLoop）",
           "storage" in out and "agentLoop" in out)
     check("t19 声明工具白名单", "extensions.platform.session.artifacts" in out)
+    check("t19 事件协议段（引擎预登记）", "== 事件协议" in out and "llm/stream" in out)
     check("t19 引擎选择", "FailoverLoop" in out and "OpenAILoop" in out)
     check("t19 业务插件（WriterPlugin）", "WriterPlugin" in out)
 
@@ -380,7 +381,7 @@ def t21_import_aic() -> None:
     import aic
     from aic.kernel import Context as KernelContext
     check("t21 import aic 统一入口（版本/Context/boot）",
-          aic.__version__ == "0.2.0"
+          aic.__version__ == "0.2.1"
           and aic.Context is KernelContext
           and callable(aic.boot)
           and callable(aic.check_bypass_imports))

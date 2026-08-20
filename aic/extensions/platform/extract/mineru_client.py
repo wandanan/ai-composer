@@ -1,4 +1,4 @@
-"""review/mineru_client.py — MinerU 文档解析引擎客户端（从原项目 mineru_extract 移植）。
+"""aic/extensions/platform/extract/mineru_client.py — MinerU 文档解析引擎客户端（从原项目 mineru_extract 移植）。
 
 批量提交 + 轮询 + MD5 缓存 + 进度估算。
 可选引擎: ENGINE=mineru 时启用（需 MinerU API 服务）, 默认 local（pymupdf 文本）。
@@ -78,7 +78,7 @@ class MinerUClient:
                     raise RuntimeError(f"MinerU 提交无 task_id: {data}")
                 return str(tid)
             except (urllib.error.URLError, TimeoutError, RuntimeError) as e:
-                logger.warning(f"[review] MinerU 提交第 {attempt + 1} 次失败: {e}")
+                logger.warning(f"[extract] MinerU 提交第 {attempt + 1} 次失败: {e}")
                 if attempt < _MAX_RETRIES - 1:
                     time.sleep(_RETRY_DELAY * (2 ** attempt))
         raise RuntimeError("MinerU 提交失败")

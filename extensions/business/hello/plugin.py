@@ -6,7 +6,7 @@
   - 消费平台能力 → ctx.get(key) 协议调用（本模板未用, 见 writer 插件实例）
 """
 from aic.kernel import Context, Plugin
-from aic.kernel.protocols import AgentTask, Phase
+from aic.extensions.platform.agent import AgentTask, Phase
 
 
 class HelloTask:

@@ -8,15 +8,17 @@ from aic.kernel import Context, Plugin
 
 @runtime_checkable
 class ArtifactRenderer(Protocol):
-    """产物渲染器协议：把合并稿/大纲渲染为交付产物（docx/pdf/...）。
+    """产物渲染器协议：把业务产物渲染为交付文件（docx/pdf/...）。
+
+    0.2.1 形状泛化: 产物经 **artifacts 命名传递（业务自定义产物名,
+    如 merged/outline）——平台不预定义业务产物形状。
 
     render 返回输出文件名（落盘到 session 工作区 output/ 目录）。
     """
 
     name: str
 
-    def render(self, session: Any, *, merged: str, outline: str,
-               version: int, **kw: Any) -> str:
+    def render(self, session: Any, *, version: int, **artifacts: str) -> str:
         """渲染产物到 session 工作区，返回输出文件名。"""
         ...
 
