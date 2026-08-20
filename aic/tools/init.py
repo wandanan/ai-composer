@@ -279,10 +279,17 @@ def _copy_skills(root: str) -> None:
             shutil.copytree(s, d)
 
 
+def _suggest_name(name: str) -> str:
+    """合法应用名建议: 小写化 + 非字母数字转下划线 + 清理。"""
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "my_app"
+
+
 def init_app(name: str) -> dict:
     """生成新应用: 精简壳 + 业务插件骨架 + 开发 Skill（aic-paradigm 三平台）。"""
     if not re.match(r"^[a-z][a-z0-9_]*$", name):
-        raise SystemExit(f"应用名不合法（小写字母/数字, 下划线分隔）: {name}")
+        raise SystemExit(
+            f"应用名不合法（小写字母/数字/下划线, 不能含点号）: {name}\n"
+            f"建议: {_suggest_name(name)}（目录名可与应用名不同, 如 aic init {_suggest_name(name)}）")
 
     name_cls = name.title().replace("_", "")
     ctx = {"name": name, "Name": name_cls}
