@@ -29,7 +29,9 @@ init（装）→ graph（看）→ caps（查）→ promote（升）→ uninstal
 aic init my_app
 ```
 
-生成壳（6 文件 + config/）+ 业务插件骨架（plugin.py + __init__.py）。`tasks.py`/`worker.py` 是**空档位**——可以不用但必须要有（壳布局契约要求装配组齐全）。
+生成壳（6 文件 + config/）+ 业务插件骨架（plugin.py + __init__.py）+ 三平台开发 Skill。`tasks.py`/`worker.py` 是**空档位**——可以不用但必须要有（壳布局契约要求装配组齐全）。
+
+**从零项目初始化**：项目根无 requirements.txt/pyproject.toml 时，init 顺带生成项目骨架（requirements.txt 含 ai-composer+uvicorn / README.md / .gitignore）；已有依赖声明不覆盖。
 
 ## graph：看
 

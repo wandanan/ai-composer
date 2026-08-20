@@ -32,7 +32,11 @@ aic init my_app
 ✅ 新应用已生成: my_app
    应用壳:  .../apps/my_app
    业务插件: .../extensions/business/my_app
+   项目骨架: requirements.txt, README.md, .gitignore（从零项目初始化时生成）
 ```
+
+> 从零开始新项目：项目根无 requirements.txt/pyproject.toml 时，init 顺带生成
+> 项目骨架（依赖清单/README/.gitignore）；已有依赖声明的项目不覆盖（幂等）。
 
 查看生成的结构：
 

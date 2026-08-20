@@ -412,7 +412,7 @@ def t21_import_aic() -> None:
     import aic
     from aic.kernel import Context as KernelContext
     check("t21 import aic 统一入口（版本/Context/boot）",
-          aic.__version__ == "0.2.1"
+          aic.__version__ == "0.2.1.post1"
           and aic.Context is KernelContext
           and callable(aic.boot)
           and callable(aic.check_bypass_imports))
@@ -440,6 +440,19 @@ def t22_skills_distribution() -> None:
         check("t22 init 生成三平台 aic-paradigm + 排除 aic-release", ok)
         init_app("demo_skills2")   # 同项目再生成: skills 幂等不覆盖
         check("t22 多次 init 幂等", ok and True)
+        # 从零项目骨架: 无依赖声明 → 生成 requirements/README/.gitignore
+        check("t22 从零项目骨架生成",
+              os.path.isfile(os.path.join(tmp, "requirements.txt"))
+              and os.path.isfile(os.path.join(tmp, "README.md"))
+              and os.path.isfile(os.path.join(tmp, ".gitignore")))
+        # 幂等: 已有 requirements → 不覆盖
+        with open(os.path.join(tmp, "requirements.txt"), "w",
+                  encoding="utf-8") as fh:
+            fh.write("custom-req\n")
+        init_app("demo_skills3")
+        content = open(os.path.join(tmp, "requirements.txt"),
+                       encoding="utf-8").read()
+        check("t22 已有依赖声明不覆盖", content.strip() == "custom-req")
         # template 从纯 init 项目提取（无 .claude 目录, skills 从 aic 包内取）
         os.makedirs(os.path.join(tmp, "docs", "learn"), exist_ok=True)
         with open(os.path.join(tmp, "docs", "learn", "foundation.md"),

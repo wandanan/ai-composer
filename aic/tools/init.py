@@ -263,6 +263,37 @@ def _write(path: str, content: str) -> None:
         f.write(content)
 
 
+def _write_project_skeleton(root: str) -> list[str]:
+    """从零项目骨架: 项目根无依赖声明时生成（requirements/README/.gitignore）。
+
+    支持两种用法: ① 从零开始新项目（生成骨架）; ② 在已有项目里加应用
+    （有 requirements.txt/pyproject.toml → 跳过, 幂等）。
+    """
+    if os.path.exists(os.path.join(root, "requirements.txt")) \
+            or os.path.exists(os.path.join(root, "pyproject.toml")):
+        return []
+    import aic
+    written: list[str] = []
+    req = ("# ai-composer 应用依赖（aic init 生成; 业务插件额外依赖按需追加）\n"
+           f"ai-composer>={aic.__version__}\n"
+           "uvicorn>=0.27\n")
+    _write(os.path.join(root, "requirements.txt"), req)
+    written.append("requirements.txt")
+    readme = (f"# {os.path.basename(root.rstrip(os.sep)) or 'aic-app'}\n\n"
+              "AIComposer 应用（应用 = 平台内核 + 业务插件组合）。\n\n"
+              "```bash\n"
+              "pip install -r requirements.txt   # 安装依赖（含 ai-composer）\n"
+              "aic init <应用名>                  # 创建应用（壳 + 业务插件骨架）\n"
+              "uvicorn apps.<应用名>.main:app     # 启动\n"
+              "```\n")
+    _write(os.path.join(root, "README.md"), readme)
+    written.append("README.md")
+    _write(os.path.join(root, ".gitignore"),
+           ".venv/\n__pycache__/\ndist/\nbuild/\n*.egg-info\ngraph-viz.html\n")
+    written.append(".gitignore")
+    return written
+
+
 def _copy_skills(root: str, overwrite: bool = False) -> None:
     """复制开发 Skill 到项目根（三平台, 只带 aic-paradigm——内部发布流程 aic-release 不随项目分发）。
 
@@ -315,9 +346,11 @@ def init_app(name: str) -> dict:
     _write(os.path.join(biz_dir, "plugin.py"), BUSINESS_PLUGIN.format(**ctx))
 
     _copy_skills(_root())   # 开发 Skill: AI 开箱即有范式约束（aic-paradigm 三平台）
+    skeleton = _write_project_skeleton(_root())   # 从零项目骨架（已有依赖声明则跳过）
 
     return {"name": name, "Name": name_cls,
-            "app_dir": app_dir, "biz_dir": biz_dir}
+            "app_dir": app_dir, "biz_dir": biz_dir,
+            "skeleton": skeleton}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -332,6 +365,8 @@ def main(argv: list[str] | None = None) -> None:
     print(f"✅ 新应用已生成: {r['name']}")
     print(f"   应用壳:  {r['app_dir']}")
     print(f"   业务插件: {r['biz_dir']}")
+    if r.get("skeleton"):
+        print(f"   项目骨架: {', '.join(r['skeleton'])}（从零项目初始化）")
     print()
     print("下一步（插件设计三步法, 详见 docs/design/business-organization.md）:")
     print(f"  ① 能力:   extensions/business/{r['name']}/plugin.py 实现服务/AgentTask")
