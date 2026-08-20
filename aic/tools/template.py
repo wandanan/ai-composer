@@ -25,11 +25,9 @@ import sys
 from aic.tools.graph import _root, build_graph
 from aic.tools.uninstall import _pkg_dir
 
-# 模板包含的基础层（目录/文件白名单）
-# aic（0.2.0 命名空间重构）: 框架包整体 = kernel + extensions/platform + apps/hello_aic + tools
-# skills（.claude/.codex/.agent）: 模板项目自带范式开发指导（约束/规范/命令速查）
-_BASE_DIRS = ("aic",
-              ".claude/skills", ".codex/skills", ".agent/skills")
+# 模板基础层说明（0.2.0）:
+#   aic 框架包整体复制（从 aic 包自身定位——仓库模式 = 仓库 aic/, 安装模式 = site-packages）
+#   skills（.claude/.codex/.agent）: 从 aic 包内 assets 复制（与 init 同一份源, 排除 aic-release）
 _BASE_FILES = ()
 _DOCS_LEARN = "docs/learn"
 
@@ -77,15 +75,17 @@ def _generate_requirements(out_dir: str, src_req: str) -> None:
     needed = sorted({pkg for imp, pkg in _IMPORT_TO_PKG.items()
                      if imp in imports} | set(_MANDATORY_PKGS))
 
-    # 版本约束从源 requirements 继承（保留原行: fastapi>=0.110）
+    # 版本约束从源 requirements 继承（保留原行: fastapi>=0.110）;
+    # 源缺失（纯 init 项目无 requirements.txt）→ 无约束, 只按模板 import 反推
     constraints: dict[str, str] = {}
-    for line in open(src_req, encoding="utf-8"):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        m = re.match(r"^([A-Za-z0-9_.-]+)", line)
-        if m:
-            constraints[m.group(1)] = line[len(m.group(1)):]
+    if os.path.isfile(src_req):
+        for line in open(src_req, encoding="utf-8"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            m = re.match(r"^([A-Za-z0-9_.-]+)", line)
+            if m:
+                constraints[m.group(1)] = line[len(m.group(1)):]
 
     lines = [
         "# ai-composer 模板依赖（aic.tools.template 自动生成: 按模板实际 import 过滤）",
@@ -270,9 +270,12 @@ def build_template(root: str, graph: dict, out_dir: str,
         return report
 
     os.makedirs(out_dir, exist_ok=True)
-    # ① 基础层
-    for d in _BASE_DIRS:
-        _copy_tree(os.path.join(root, d), os.path.join(out_dir, d))
+    # ① 基础层: aic 框架包（从包自身定位, 安装模式 = site-packages）
+    import aic
+    _copy_tree(os.path.dirname(aic.__file__), os.path.join(out_dir, "aic"))
+    # ①·五 开发 Skill（三平台, 从 aic 包内 assets 复制——与 init 同一份源, 排除 aic-release）
+    from aic.tools.init import _copy_skills
+    _copy_skills(out_dir)
     # ② 模板自检脚本（壳契约 + hello_aic 装配, 与模板自洽）
     os.makedirs(os.path.join(out_dir, "test"), exist_ok=True)
     with open(os.path.join(out_dir, "test", "template_check.py"),
@@ -280,8 +283,9 @@ def build_template(root: str, graph: dict, out_dir: str,
         f.write(_TEMPLATE_CHECK)
     # ③ 公共插件包
     report["pkgs"] = _plugin_pkg_copy(root, graph, out_dir)
-    # ④ docs/learn
-    _copy_tree(os.path.join(root, _DOCS_LEARN), os.path.join(out_dir, _DOCS_LEARN))
+    # ④ docs/learn（源缺失跳过——纯 init 项目无此目录）
+    if os.path.isdir(os.path.join(root, _DOCS_LEARN)):
+        _copy_tree(os.path.join(root, _DOCS_LEARN), os.path.join(out_dir, _DOCS_LEARN))
     # ⑤ 示例壳 hello_aic
     _write_hello_aic(out_dir, graph)
     # ⑥ requirements 自动生成（按模板实际 import 过滤）

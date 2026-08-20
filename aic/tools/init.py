@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -262,8 +263,24 @@ def _write(path: str, content: str) -> None:
         f.write(content)
 
 
+def _copy_skills(root: str) -> None:
+    """复制开发 Skill 到项目根（三平台, 只带 aic-paradigm——内部发布流程 aic-release 不随项目分发）。
+
+    源 = aic 包内 assets/skills（仓库模式 = 仓库 aic/, 安装模式 = site-packages）;
+    已存在不覆盖（幂等）。
+    """
+    import aic
+    src = os.path.join(os.path.dirname(aic.__file__), "tools", "assets", "skills")
+    for plat, dst_dir in (("claude", ".claude"), ("codex", ".codex"),
+                          ("agent", ".agent")):
+        s = os.path.join(src, plat, "aic-paradigm")
+        d = os.path.join(root, dst_dir, "skills", "aic-paradigm")
+        if os.path.isdir(s) and not os.path.isdir(d):
+            shutil.copytree(s, d)
+
+
 def init_app(name: str) -> dict:
-    """生成新应用: 精简壳 + 业务插件骨架。"""
+    """生成新应用: 精简壳 + 业务插件骨架 + 开发 Skill（aic-paradigm 三平台）。"""
     if not re.match(r"^[a-z][a-z0-9_]*$", name):
         raise SystemExit(f"应用名不合法（小写字母/数字, 下划线分隔）: {name}")
 
@@ -284,6 +301,8 @@ def init_app(name: str) -> dict:
 
     _write(os.path.join(biz_dir, "__init__.py"), BUSINESS_INIT.format(**ctx))
     _write(os.path.join(biz_dir, "plugin.py"), BUSINESS_PLUGIN.format(**ctx))
+
+    _copy_skills(_root())   # 开发 Skill: AI 开箱即有范式约束（aic-paradigm 三平台）
 
     return {"name": name, "Name": name_cls,
             "app_dir": app_dir, "biz_dir": biz_dir}

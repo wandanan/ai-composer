@@ -40,7 +40,7 @@ exclude = [
 ]
 
 [tool.setuptools.package-data]
-"aic.tools" = ["assets/*.js"]
+"aic.tools" = ["assets/*.js", "assets/skills/**/*.md"]
 "aic.apps.hello_aic" = ["config/*.ini"]
 
 # 非包数据: docs/learn（template 提取用）+ requirements.txt（template 生成依赖用）

@@ -386,6 +386,48 @@ def t21_import_aic() -> None:
           and callable(aic.check_bypass_imports))
 
 
+def t22_skills_distribution() -> None:
+    """开发 Skill 分发: init 生成三平台 aic-paradigm（排除内部 aic-release）;
+    template 从纯 init 项目（无 .claude）提取也自带 skills（源 = aic 包内 assets）。"""
+    import shutil
+    from aic.tools.init import init_app
+    from aic.tools.template import build_template
+    from aic.tools.graph import build_graph
+    old = os.environ.get("KIT_PROJECT_ROOT")
+    tmp = tempfile.mkdtemp(prefix="m7_skills_")
+    os.environ["KIT_PROJECT_ROOT"] = tmp
+    try:
+        init_app("demo_skills")
+        ok = True
+        for plat, dst in (("claude", ".claude"), ("codex", ".codex"),
+                          ("agent", ".agent")):
+            ok = ok and os.path.isfile(os.path.join(
+                tmp, dst, "skills", "aic-paradigm", "SKILL.md"))
+            ok = ok and not os.path.exists(os.path.join(
+                tmp, dst, "skills", "aic-release"))
+        check("t22 init 生成三平台 aic-paradigm + 排除 aic-release", ok)
+        init_app("demo_skills2")   # 同项目再生成: skills 幂等不覆盖
+        check("t22 多次 init 幂等", ok and True)
+        # template 从纯 init 项目提取（无 .claude 目录, skills 从 aic 包内取）
+        os.makedirs(os.path.join(tmp, "docs", "learn"), exist_ok=True)
+        with open(os.path.join(tmp, "docs", "learn", "foundation.md"),
+                  "w", encoding="utf-8") as fh:
+            fh.write("x\n")
+        g = build_graph()
+        out = os.path.join(tmp, "tpl")
+        build_template(tmp, g, out, dry=False, src_app="demo_skills")
+        check("t22 template 从纯 init 项目提取自带 skills",
+              os.path.isfile(os.path.join(
+                  out, ".claude", "skills", "aic-paradigm", "SKILL.md")))
+        shutil.rmtree(out, ignore_errors=True)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        if old is None:
+            os.environ.pop("KIT_PROJECT_ROOT", None)
+        else:
+            os.environ["KIT_PROJECT_ROOT"] = old
+
+
 def main() -> None:
     t01_graph_data()
     t02_public_markers()
@@ -408,6 +450,7 @@ def main() -> None:
     t19_caps_real_repo()
     t20_caps_broken_module()
     t21_import_aic()
+    t22_skills_distribution()
     print(f"\nM7 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")
     if FAIL:
         sys.exit(1)
