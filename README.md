@@ -102,12 +102,13 @@ uvicorn apps.my_app.main:app --port 8001
 uvicorn aic.apps.hello_aic.main:app --port 8000
 ```
 
-## 工具链（aic 六命令）
+## 工具链（aic 七命令）
 
 ```
 aic init <name>              装    创建新应用（壳 + 插件骨架）
 aic graph                    看    生成项目结构图谱 graph-viz.html（自包含交互）
 aic caps                     查    显示框架可用能力（平台服务/业务插件/声明工具/引擎）
+aic skills                   同步  覆盖更新项目根三平台开发 Skill（安装新版本后）
 aic promote <类> [--yes]     升    私有插件上浮为公共插件（移动包 + 更新引用 + PUBLIC 标记）
 aic uninstall <应用> [--yes] 卸    应用/插件卸载（影响分析后删除）
 aic template <应用> [--out]  模板  提取新应用开发模板（只带走公共插件）

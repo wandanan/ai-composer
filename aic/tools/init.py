@@ -263,11 +263,11 @@ def _write(path: str, content: str) -> None:
         f.write(content)
 
 
-def _copy_skills(root: str) -> None:
+def _copy_skills(root: str, overwrite: bool = False) -> None:
     """复制开发 Skill 到项目根（三平台, 只带 aic-paradigm——内部发布流程 aic-release 不随项目分发）。
 
     源 = aic 包内 assets/skills（仓库模式 = 仓库 aic/, 安装模式 = site-packages）;
-    已存在不覆盖（幂等）。
+    init 幂等（已存在不覆盖）; aic skills 命令 overwrite=True 覆盖旧版本。
     """
     import aic
     src = os.path.join(os.path.dirname(aic.__file__), "tools", "assets", "skills")
@@ -275,8 +275,13 @@ def _copy_skills(root: str) -> None:
                           ("agent", ".agent")):
         s = os.path.join(src, plat, "aic-paradigm")
         d = os.path.join(root, dst_dir, "skills", "aic-paradigm")
-        if os.path.isdir(s) and not os.path.isdir(d):
-            shutil.copytree(s, d)
+        if not os.path.isdir(s):
+            continue
+        if os.path.isdir(d):
+            if not overwrite:
+                continue
+            shutil.rmtree(d)
+        shutil.copytree(s, d)
 
 
 def _suggest_name(name: str) -> str:

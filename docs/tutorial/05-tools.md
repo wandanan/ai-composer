@@ -14,6 +14,7 @@ init（装）→ graph（看）→ caps（查）→ promote（升）→ uninstal
 | `aic init <name>` | 创建新应用（壳 + 插件骨架） | 生成 9 文件 |
 | `aic graph` | 生成项目结构图谱 | 输出 graph-viz.html（自包含，双击即开） |
 | `aic caps` | 显示框架可用能力（平台服务/业务插件/声明工具/引擎） | 写能力前先查——四问判断源在声明层, 不用读源码 |
+| `aic skills` | 覆盖更新项目根三平台开发 Skill | 安装新版本后同步 aic-paradigm（init 是幂等复制, 这是覆盖更新） |
 | `aic promote <类> [--yes]` | 私有插件上浮为公共插件 | 默认预演：只显示影响清单，加 `--yes` 执行 |
 | `aic uninstall <应用> [--yes]` | 卸载应用/插件 | 默认预演：只显示影响清单，加 `--yes` 执行 |
 | `aic template <应用> [--out]` | 提取新应用开发模板 | 提取到 aic-template/（`--dry-run` 预演） |

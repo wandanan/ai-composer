@@ -33,6 +33,7 @@ description: AIComposer 范式开发 Skill——约束、规范、最佳实践�
 | `aic init <name>` | 生成新应用：壳 6 文件 + 插件骨架 + config/ | tasks/worker 为空档位（可以不用但必须要有） |
 | `aic graph` | 生成 `graph-viz.html` 交互图谱（力导向 + 代码树 + 弹窗） | 自包含，双击即开 |
 | `aic caps` | 显示框架可用能力：平台服务 / 业务插件 / 声明工具 / 引擎 | 写能力前先查（能力阶梯 rung 1） |
+| `aic skills` | 覆盖更新项目根三平台 aic-paradigm skill | 安装 ai-composer 新版本后同步（覆盖旧版本） |
 | `aic promote <类> [--yes]` | 私有插件上浮为公共插件：移动包 + 更新全项目 import + 写 `PUBLIC` 标记 | **默认预演**（只显示影响清单），`--yes` 执行；`--to platform/business/路径` |
 | `aic uninstall <应用> [--yes]` | 卸载应用（壳 + 专属插件）；`--plugin <类>` 卸载插件 | **默认预演**，`--yes` 执行；共享/公共插件保留 |
 | `aic template <应用> [--out]` | 提取新应用开发模板：基础 AIC + 公共插件 + 示例壳 hello_aic | `--dry-run` 预演 |

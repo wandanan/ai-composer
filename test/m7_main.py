@@ -376,6 +376,37 @@ def t20_caps_broken_module() -> None:
         check("t20 坏模块有提示", "broken 不可导入" in out)
 
 
+def t23_skills_update() -> None:
+    """aic skills 覆盖更新: 旧版 skill 被新版替换（三平台, 无 aic-release）。"""
+    import shutil
+    from aic.tools.init import init_app
+    from aic.tools.skills import skills
+    old = os.environ.get("KIT_PROJECT_ROOT")
+    tmp = tempfile.mkdtemp(prefix="m7_skills_upd_")
+    os.environ["KIT_PROJECT_ROOT"] = tmp
+    try:
+        init_app("demo_upd")   # init 生成 skill（幂等）
+        marker = os.path.join(tmp, ".claude", "skills", "aic-paradigm", "OLD_VERSION")
+        with open(marker, "w", encoding="utf-8") as fh:
+            fh.write("old\n")
+        skills(tmp)            # 覆盖更新
+        check("t23 skills 覆盖旧版本（旧标记被清除, 新版 SKILL.md 就位）",
+              not os.path.exists(marker)
+              and os.path.isfile(os.path.join(
+                  tmp, ".claude", "skills", "aic-paradigm", "SKILL.md")))
+        check("t23 三平台齐全 + 排除 aic-release",
+              all(os.path.isdir(os.path.join(tmp, d, "skills", "aic-paradigm"))
+                  for d in (".claude", ".codex", ".agent"))
+              and not os.path.exists(os.path.join(
+                  tmp, ".claude", "skills", "aic-release")))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        if old is None:
+            os.environ.pop("KIT_PROJECT_ROOT", None)
+        else:
+            os.environ["KIT_PROJECT_ROOT"] = old
+
+
 def t21_import_aic() -> None:
     """0.2.0 统一入口: import aic 与 aic.kernel 等价。"""
     import aic
@@ -451,6 +482,7 @@ def main() -> None:
     t19_caps_real_repo()
     t20_caps_broken_module()
     t21_import_aic()
+    t23_skills_update()
     t22_skills_distribution()
     print(f"\nM7 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")
     if FAIL:

@@ -21,6 +21,7 @@ _COMMANDS = {
     "uninstall": "aic.tools.uninstall",
     "template": "aic.tools.template",
     "caps": "aic.tools.caps",
+    "skills": "aic.tools.skills",
 }
 
 _USAGE = """\
@@ -30,6 +31,7 @@ _USAGE = """\
   init       初始化新应用（生成壳 + 业务插件骨架 + 空档位 tasks/worker）
   graph      生成项目结构图谱 graph-viz.html（自包含交互, 双击即开）
   caps       显示框架可用能力（平台服务 / 业务插件 / 声明工具 / 引擎）
+  skills     覆盖更新项目根三平台开发 Skill（安装新版本后同步 aic-paradigm）
   promote    私有插件 → 公共插件（移动包 + 更新引用 + PUBLIC 标记, 默认只显示影响清单（预演））
   uninstall  应用/插件卸载（影响分析后删除, 默认只显示影响清单（预演））
   template   新应用开发模板提取（只带走公共插件 + 示例壳 hello_aic）
