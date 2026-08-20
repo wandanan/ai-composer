@@ -308,6 +308,65 @@ def t18_template_self_check() -> None:
     check("t18 自检含装配", "build_shell()" in _TEMPLATE_CHECK)
 
 
+# ── 能力清单（tools.caps）────────────────────────
+
+def _caps_output(root: str) -> tuple[int, str]:
+    import io
+    from contextlib import redirect_stdout
+    from tools.caps import caps
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = caps(root)
+    return rc, buf.getvalue()
+
+
+def t19_caps_real_repo() -> None:
+    rc, out = _caps_output(_ROOT)
+    check("t19 caps 真实仓库输出四段", rc == 0
+          and all(s in out for s in ("== 平台服务", "== 业务插件",
+                                     "== 声明工具", "== 引擎")))
+    check("t19 平台服务 key（storage/agentLoop）",
+          "storage" in out and "agentLoop" in out)
+    check("t19 声明工具白名单", "extensions.platform.session.artifacts" in out)
+    check("t19 引擎选择", "FailoverLoop" in out and "OpenAILoop" in out)
+    check("t19 业务插件（WriterPlugin）", "WriterPlugin" in out)
+
+
+def t20_caps_broken_module() -> None:
+    """坏插件模块不拖垮清单（合成项目, 隔离 extensions 命名空间）。"""
+    with tempfile.TemporaryDirectory() as base:
+        for rel, content in {
+            "extensions/platform/__init__.py": '"""platform"""\n',
+            "extensions/platform/broken/__init__.py": "raise ImportError('boom')\n",
+            "extensions/platform/ok/__init__.py":
+                "from kernel import Plugin\n"
+                "class OkPlugin(Plugin):\n"
+                "    provides = ['okSvc']\n"
+                "    def apply(self, ctx):\n"
+                "        ctx.register('okSvc', 1)\n",
+        }.items():
+            p = os.path.join(base, rel)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(content)
+        # 隔离: 临时项目优先于真实仓库的 extensions 命名空间
+        saved = {k: v for k, v in sys.modules.items()
+                 if k == "extensions" or k.startswith("extensions.")}
+        for k in saved:
+            del sys.modules[k]
+        sys.path.insert(0, base)
+        try:
+            rc, out = _caps_output(base)
+        finally:
+            sys.path.remove(base)
+            for k in [k for k in sys.modules
+                      if k == "extensions" or k.startswith("extensions.")]:
+                del sys.modules[k]
+            sys.modules.update(saved)
+        check("t20 坏模块不拖垮清单", rc == 0 and "okSvc" in out)
+        check("t20 坏模块有提示", "broken 不可导入" in out)
+
+
 def main() -> None:
     t01_graph_data()
     t02_public_markers()
@@ -327,6 +386,8 @@ def main() -> None:
     t16_template_dry_run()
     t17_template_extract()
     t18_template_self_check()
+    t19_caps_real_repo()
+    t20_caps_broken_module()
     print(f"\nM7 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")
     if FAIL:
         sys.exit(1)

@@ -21,12 +21,13 @@ description: AIComposer 范式开发 Skill——约束、规范、最佳实践�
 **跨盒纪律**：消费方永不 import 实现（走 ctx 服务）; 组合面（*Plugin / loops 包 / profile.py
 组合点）与声明工具（extract、session.artifacts）豁免——旁路 import 装配期报错（kernel/imports.py）。
 
-## 命令速查（aic 五命令）
+## 命令速查（aic 六命令）
 
 | 命令 | 作用 | 备注 |
 |---|---|---|
 | `aic init <name>` | 生成新应用：壳 6 文件 + 插件骨架 + config/ | tasks/worker 为空档位（可以不用但必须要有） |
 | `aic graph` | 生成 `graph-viz.html` 交互图谱（力导向 + 代码树 + 弹窗） | 自包含，双击即开 |
+| `aic caps` | 显示框架可用能力：平台服务 / 业务插件 / 声明工具 / 引擎 | 写能力前先查（能力阶梯 rung 1） |
 | `aic promote <类> [--yes]` | 私有插件上浮为公共插件：移动包 + 更新全项目 import + 写 `PUBLIC` 标记 | **默认预演**（只显示影响清单），`--yes` 执行；`--to platform/business/路径` |
 | `aic uninstall <应用> [--yes]` | 卸载应用（壳 + 专属插件）；`--plugin <类>` 卸载插件 | **默认预演**，`--yes` 执行；共享/公共插件保留 |
 | `aic template <应用> [--out]` | 提取新应用开发模板：基础 AIC + 公共插件 + 示例壳 hello_aic | `--dry-run` 预演 |
@@ -40,6 +41,7 @@ description: AIComposer 范式开发 Skill——约束、规范、最佳实践�
 |---|---|---|
 | 创建新应用 | `aic init <name>` | 生成壳+插件骨架 → 三步法写插件 → 挂载 → 启动 |
 | 查看项目结构/插件关系 | `aic graph` | 生成图谱 → 双击打开 → 点击交互 |
+| 查框架有什么可用能力 | `aic caps` | 平台服务表（key/换法/特性）→ ctx.get 消费；业务插件 → profile.py 挂载 |
 | 把私有插件变成公共插件 | `aic promote <类>` | 预演看清单 → `--yes` 执行 → 验证 |
 | 卸载一个应用 | `aic uninstall <应用>` | 预演看删除/保留 → `--yes` 执行 |
 | 卸载一个插件 | `aic uninstall --plugin <类>` | 预演（有消费方会拒绝）→ `--yes` 执行 |
@@ -97,9 +99,22 @@ shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_a
 - **消费纪律**：每次调用时 `ctx.get(key)`，不缓存引用（缓存了替换就失效）
 - **能力面纪律**：`provides` 必须覆盖 `apply` 里注册的全部 key
 - **IO 纪律**：能力里不直接写文件/连库——落盘走产物通道（`save_artifact`）或数据通道（`ctx.get("storage")`）
-- **复用优先纪律**：动手写任何能力前，先查 SDK 参考（§3 服务表 / §8 换引擎换插件）——
-  平台已内置的能力（含 OpenAI 兼容引擎 `OpenAIEnginePlugin`）直接挂载使用，**不要自己实现**；
-  只有平台没有的才按 §8 写自定义实现（引擎适配器 = 扩展场景）
+- **能力阶梯**（写任何能力前先爬, 第一级成立就停）：
+  ```
+  1. 平台已有服务?    → aic caps / SDK §3: ctx.get(key) 直接消费（storage/cache/jobs/...）
+  2. 已有业务插件?    → extensions/business/*: profile.py 挂载
+  3. 声明工具可用?    → UTILITY_MODULES（extract / session.artifacts 纯函数直接 import）
+  4. 部分满足?       → 扩展优先（见下）: 注入换实现 / 包装器 / 覆盖注册 —— 不动轮子本体
+  5. 以上都没有（语义不同）→ 才写新插件（组件 + 声明）
+  ```
+- **扩展 vs 修改 vs 新造**（现有轮子部分满足时, 四问诊断, 判断源在声明层不看源码）：
+  ```
+  语义（是不是这功能?）  不是 → 造新插件
+  形状（消费方代码能跑?） 不能 → 适配器 / 新 key 并存（加法原则）
+  实现（内部件合适?）    不合适 → 构造注入换实现（CachePlugin(impl=RedisCache()) 同款）
+  行为（要横切增强?）    要 → 包装器组件（协议化转发, 轮子本体不动）
+  改轮子本体 = 影响所有消费者 → 最后手段: blast_radius 先算影响 + 上浮三问
+  ```
 - **契约**：输入 = 会话 meta（`create_session({"job": ...})`）；输出 = 产物（文件）或数据（记录）
 
 ## 官方教程（Skill 内嵌副本，随 Skill 分发）
@@ -113,7 +128,7 @@ shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_a
 | 最小插件完整示例（可整段照抄） | `tutorial/03-first-plugin.md` |
 | 壳与装配（profile/shell/main/tasks/worker 代码） | `tutorial/04-app-shell.md` |
 | 安装与 3 步快速开始 | `tutorial/01-installation.md` / `02-quickstart.md` |
-| 工具链流程（装/看/升/卸/模板） | `tutorial/05-tools.md` / `07-command-reference.md` |
+| 工具链流程（装/看/查/升/卸/模板） | `tutorial/05-tools.md` / `07-command-reference.md` |
 | 设计判断（上浮三问/契约/诚实边界） | `tutorial/06-best-practices.md` |
 
 ## 最佳实践（上浮三问）

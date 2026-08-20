@@ -1,10 +1,10 @@
 # 05 - 工具链
 
-本教程的目标：掌握 `aic` 五命令——它们共享同一套声明式元数据，构成完整的工程闭环：
+本教程的目标：掌握 `aic` 六命令——它们共享同一套声明式元数据，构成完整的工程闭环：
 
 ```
-init（装）→ graph（看）→ promote（升）→ uninstall（卸）
-                              └→ template（模板）
+init（装）→ graph（看）→ caps（查）→ promote（升）→ uninstall（卸）
+                                    └→ template（模板）
 ```
 
 ## 命令总览
@@ -13,6 +13,7 @@ init（装）→ graph（看）→ promote（升）→ uninstall（卸）
 |---|---|---|
 | `aic init <name>` | 创建新应用（壳 + 插件骨架） | 生成 9 文件 |
 | `aic graph` | 生成项目结构图谱 | 输出 graph-viz.html（自包含，双击即开） |
+| `aic caps` | 显示框架可用能力（平台服务/业务插件/声明工具/引擎） | 写能力前先查——四问判断源在声明层, 不用读源码 |
 | `aic promote <类> [--yes]` | 私有插件上浮为公共插件 | 默认预演：只显示影响清单，加 `--yes` 执行 |
 | `aic uninstall <应用> [--yes]` | 卸载应用/插件 | 默认预演：只显示影响清单，加 `--yes` 执行 |
 | `aic template <应用> [--out]` | 提取新应用开发模板 | 提取到 aic-template/（`--dry-run` 预演） |
@@ -45,6 +46,32 @@ start graph-viz.html     # Windows; macOS/Linux 用 open
 ```
 
 交互：按应用过滤、按类别过滤（平台/领域/孤儿/动态/AI）、树与图双向联动。**孤儿插件（无应用挂载）在图上以虚线显示**——一目了然哪些是残留。
+
+## caps：查
+
+```bash
+aic caps
+```
+
+显示框架现在有什么可用——四问判断源全部落声明层（不用读源码）：
+
+```
+语义（是不是这功能?）  → 服务 key + 特性说明
+形状（代码能不能跑?）  → 协议/服务形状（provides + 插件名）
+实现（内部件合不合适?）→ 换法（构造参数: impl/redis_url/runtime_dir...）
+行为（需要增强吗?）    → 特性说明（插件 docstring 首行）
+```
+
+输出四段：
+
+```
+== 平台服务 ==   key + 插件 + 换法 + 特性  → ctx.get(key) 直接消费
+== 业务插件 ==   插件 + provides + 特性     → profile.py 挂载
+== 声明工具 ==   UTILITY_MODULES 白名单     → 纯函数直接 import
+== 引擎 ==       agentLoop 实现选择        → shell 引擎决策 / profile.py 可换
+```
+
+**能力阶梯**（写任何能力前先爬）：平台服务 → 业务插件 → 声明工具 → 部分满足则扩展（注入/包装/覆盖）→ 都没有才写新插件。
 
 ## promote：升（私有 → 公共）
 
