@@ -14,6 +14,7 @@ from .kernel import (
     boot,
     direct_dependents,
 )
+from .imports import check_bypass_imports
 from .layout import check_shell_content, check_shell_layout
 from .plugin import Plugin
 
@@ -27,6 +28,7 @@ __all__ = [
     "ServiceNotFound",
     "blast_radius",
     "boot",
+    "check_bypass_imports",
     "check_shell_content",
     "check_shell_layout",
     "direct_dependents",

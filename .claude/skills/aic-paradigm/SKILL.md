@@ -8,14 +8,18 @@ description: AIComposer 范式开发 Skill——约束、规范、最佳实践�
 ## 范式一句话
 
 ```
-应用 = 平台内核 + 业务插件组合
+组件 = 能力实现（普通类/函数, 不认识内核）
+插件 = 组件 + 插件声明（inject/provides/apply, 内核接入器）
+应用 = 组件组合（内核组织 + 插件接入 + 应用壳声明清单）
 ```
 
 - **内核**（`kernel/`）：机制（注册/事件/装配/可逆卸载），零业务零能力
-- **插件**（`extensions/`）：能力提供方（业务 + 通用），三步法编写
+- **插件**（`extensions/`）：组件 + 接入声明（inject/provides/apply），三步法编写
 - **应用壳**（`apps/`）：组合者（选插件清单 + 开入口），不实现能力
 
 **纪律核心**：业务逻辑永远在插件里，壳只做组合。
+**跨盒纪律**：消费方永不 import 实现（走 ctx 服务）; 组合面（*Plugin / loops 包 / profile.py
+组合点）与声明工具（extract、session.artifacts）豁免——旁路 import 装配期报错（kernel/imports.py）。
 
 ## 命令速查（aic 五命令）
 

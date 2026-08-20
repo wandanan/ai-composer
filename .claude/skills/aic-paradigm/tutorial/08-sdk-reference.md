@@ -369,7 +369,7 @@ def run_turn(session_id: str, speaker: str, question: str):
 
 ## 8. 换引擎/换插件（同一个机制）
 
-**一切都是插件组合**——换引擎和换插件是同一件事：改 `profile.py` 的 `PLUGINS` 一行。
+**一切都是组件组合**——换引擎和换插件是同一件事（插件 = 组件 + 插件声明，换插件就是换组件或换接入方式）：改 `profile.py` 的 `PLUGINS` 一行。
 消费方只认 key + 协议形状（`ctx.get(key)`），永远不 import 实现。
 
 | key | 默认实现 | 可换实现 | 换法 |
@@ -442,3 +442,43 @@ class MyEnginePlugin(Plugin):                      # 与 OpenAIEnginePlugin 同�
 ```
 
 挂载后即覆盖 fake——业务插件、SSE 桥接、前端全部零改动（消费方只认 `agentLoop` + 协议形状）。
+
+## 9. 跨盒 import 规则（旁路契约）
+
+"黑箱之间藏了多少未知依赖"由结构机制回答（inject 声明 / graph / blast_radius / 装配期校验），
+**旁路 import 是最后一道结构约束**：业务代码绕过 ctx 直接 import 其他扩展的实现/组件
+（如 `from extensions.platform.base.storage import LocalStorage`）——换实现时它还继续生效，
+契约被悄悄绕过。`kernel/imports.py` 的 `check_bypass_imports` 在每次装配（build_shell）时
+扫描 apps/ 与 extensions/ 的跨盒 import，违规直接报错（`[kernel]` 前缀，收集式，sorted 确定性）。
+
+### 三类合法跨盒 import
+
+| 类别 | 规则 | 识别 |
+|---|---|---|
+| ① 组合面 | 应用壳可 import 扩展的适配器类与引擎 | 名字 `*Plugin` 结尾；或源模块在 loops 包 |
+| ② 组合点 | profile.py 内实现选择自由（`JobsPlugin(impl=...)` 是文档化换法） | 文件名 == `profile.py` |
+| ③ 声明工具 | 无状态纯函数公共 API，任意层可 import | 白名单（见下） |
+
+其余跨盒 import 一律违规（违规四型，装配期 RuntimeError）：
+- **应用壳直连扩展实现**（main.py/tasks.py 里 import 组件/函数/常量）→ 应走 `ctx.get(key)` 服务
+- **跨应用 import**（apps.A → apps.B）→ 应用之间不得互相依赖
+- **跨扩展根包旁路**（业务↔平台、业务↔业务）→ 应走 ctx 服务，或声明为公共工具
+- **扩展反向 import 应用壳** → 依赖方向倒置
+
+### 声明工具白名单（当前）
+
+```python
+UTILITY_MODULES = (
+    "extensions.platform.extract",            # extract_document / ALLOWED_TYPES 等（纯函数）
+    "extensions.platform.session.artifacts",  # save/list/read/next_draft_version（无状态文件助手）
+)
+```
+
+> **新增公共工具** = 改 `kernel/imports.py` 白名单 + 同步本文档（声明强制显式，不允许静默旁路）。
+> 有 ctx 服务的能力（storage/cache/jobs/agentLoop/extract 服务形态）**不走白名单**——走 `ctx.get`。
+
+### 边界
+
+- review 业务线整体排除扫描（不进发布包，卫生问题随业务线处理）
+- extensions→tools 不在检查范围（sandbox 补丁/工具注册是 CLI 层附属，设计上反向）
+- `importlib.import_module(f"apps.{app_pkg}.worker")` 等动态字符串形态不在此检查（运行时内省，任务名协议另管）

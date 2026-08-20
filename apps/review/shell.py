@@ -7,7 +7,8 @@ from __future__ import annotations
 import configparser
 import os
 
-from kernel import Context, boot, check_shell_content, check_shell_layout
+from kernel import (Context, boot, check_bypass_imports,
+                    check_shell_content, check_shell_layout)
 
 from apps.review.profile import PLUGINS
 
@@ -25,6 +26,7 @@ def load_config() -> dict:
 def build_shell() -> Context:
     check_shell_layout(_HERE)   # 壳布局契约: 存在性检查（机制强制）
     check_shell_content(_HERE)  # 壳布局契约: 内容检查（AST, 壳内不得有业务代码/接线）
+    check_bypass_imports(os.path.dirname(os.path.dirname(_HERE)))  # 旁路 import 契约（机制强制）
     shell = Context()
     shell.register("config", load_config())
 

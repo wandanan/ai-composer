@@ -25,6 +25,8 @@
   13. 降级: worker 不可导入 → 跳过校验（不报错）
   14. 冒烟: 4 应用 build_shell 全部成功; review 壳注册 review.execute_review 通过
   15. init 模板渲染健全: 无残留花括号; 含布局检查与 app_pkg
+  16. 旁路 import 契约: 真实仓库零违规 / 四型违规 / 组合面与白名单放行 /
+      review 排除 / 报错确定性
 """
 import os
 import sys
@@ -32,7 +34,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kernel import Context, Plugin, boot, check_shell_layout
+from kernel import Context, Plugin, boot, check_bypass_imports, check_shell_layout
 from kernel.layout import ASSEMBLY_FILES, ENTRY_FILES
 
 PASS: list[str] = []
@@ -330,9 +332,173 @@ def t15_init_templates() -> None:
     rendered = [t.format(**ctx) for t in (APP_SHELL, APP_PROFILE, APP_TASKS, APP_WORKER)]
     check("t15 模板渲染无残留花括号", all("{{" not in r and "}}" not in r for r in rendered))
     check("t15 APP_SHELL 含布局检查", "check_shell_layout(_HERE)" in rendered[0])
+    check("t15 APP_SHELL 含旁路检查", "check_bypass_imports(" in rendered[0])
     check("t15 APP_PROFILE 含 app_pkg", 'JobsPlugin(app_pkg="demo_app")' in rendered[1])
     check("t15 APP_WORKER 任务名内省目标存在", 'celery_app = Celery("demo_app"' in rendered[3])
     check("t15 APP_TASKS 空档位引导", "TASK_EXAMPLE = \"demo_app.example\"" in rendered[2])
+
+
+# ── 旁路 import 契约 ─────────────────────────────
+
+def _make_project(base: str, files: dict[str, str]) -> str:
+    """构造合成项目: {相对根路径: 内容}。"""
+    for rel, content in files.items():
+        p = os.path.join(base, rel)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(content)
+    return base
+
+
+def t20_bypass_real_root() -> None:
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        check_bypass_imports(root)
+        check("t20 真实仓库旁路检查零违规", True)
+    except RuntimeError as e:
+        print(f"    {e}")
+        check("t20 真实仓库旁路检查零违规", False)
+
+
+def t21_bypass_app_direct() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "apps/demo/profile.py": "from extensions.platform.base import StoragePlugin\n",
+            "apps/demo/main.py": "from extensions.platform.base.storage import LocalStorage\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t21 应用直连组件 → 违规", False)
+        except RuntimeError as e:
+            check("t21 应用直连组件 → 违规",
+                  "应用壳直连扩展实现" in str(e)
+                  and "extensions.platform.base.storage" in str(e))
+
+
+def t22_bypass_business_platform() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "extensions/business/demo/plugin.py":
+                "from extensions.platform.base.storage import LocalStorage\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t22 业务插件直连平台组件 → 违规", False)
+        except RuntimeError as e:
+            check("t22 业务插件直连平台组件 → 违规",
+                  "跨扩展根包旁路" in str(e))
+
+
+def t23_bypass_cross_business() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "extensions/business/a/plugin.py":
+                "from extensions.business.b.plugin import BThing\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t23 跨业务插件 import → 违规", False)
+        except RuntimeError as e:
+            check("t23 跨业务插件 import → 违规",
+                  "跨扩展根包旁路" in str(e))
+
+
+def t24_bypass_extension_app() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "apps/demo/tasks.py": "TASK_X = \"demo.x\"\n",
+            "extensions/business/demo/plugin.py":
+                "from apps.demo.tasks import TASK_X\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t24 扩展反向 import 应用 → 违规", False)
+        except RuntimeError as e:
+            check("t24 扩展反向 import 应用 → 违规",
+                  "扩展反向 import 应用壳" in str(e))
+
+
+def t25_bypass_composition_ok() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "apps/demo/profile.py":
+                "from extensions.platform.base.jobs import CeleryJobQueue, ThreadJobQueue\n",
+            "apps/demo/shell.py": "from extensions.platform.loops import FakeLoop\n",
+            "apps/demo/main.py": "from extensions.platform.session import SessionPlugin\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t25 组合面（profile impl / loops / *Plugin）全部放行", True)
+        except RuntimeError as e:
+            print(f"    {e}")
+            check("t25 组合面（profile impl / loops / *Plugin）全部放行", False)
+
+
+def t26_bypass_utility_ok() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "apps/demo/main.py":
+                "from extensions.platform.extract import extract_document\n"
+                "from extensions.platform.session.artifacts import list_artifacts\n",
+            "extensions/business/demo/plugin.py":
+                "from extensions.platform.session.artifacts import save_artifact\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t26 声明工具白名单（extract / session.artifacts）放行", True)
+        except RuntimeError as e:
+            print(f"    {e}")
+            check("t26 声明工具白名单（extract / session.artifacts）放行", False)
+
+
+def t27_bypass_relative_escape() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "extensions/platform/base/__init__.py": "from ..loops import FakeLoop\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t27 相对导入逃出根包 → 违规", False)
+        except RuntimeError as e:
+            check("t27 相对导入逃出根包 → 违规",
+                  "跨扩展根包旁路" in str(e)
+                  and "extensions.platform.loops" in str(e))
+
+
+def t28_bypass_review_excluded() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "apps/review/main.py":
+                "from extensions.platform.base.storage import LocalStorage\n",
+            "extensions/business/review/plugin.py":
+                "from apps.review.tasks import TASK_X\n",
+        })
+        try:
+            check_bypass_imports(base)
+            check("t28 review 业务线整体排除扫描", True)
+        except RuntimeError as e:
+            print(f"    {e}")
+            check("t28 review 业务线整体排除扫描", False)
+
+
+def t29_bypass_deterministic() -> None:
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
+            "apps/demo/b.py": "from extensions.platform.base.storage import LocalStorage\n",
+            "apps/demo/a.py": "from extensions.platform.base.cache import RedisCache\n",
+        })
+        m1 = m2 = None
+        for i in (1, 2):
+            try:
+                check_bypass_imports(base)
+            except RuntimeError as e:
+                if i == 1:
+                    m1 = str(e)
+                else:
+                    m2 = str(e)
+        check("t29 报错确定性（两次一致, sorted 收集式）",
+              m1 is not None and m1 == m2
+              and m1.index("apps/demo/a.py") < m1.index("apps/demo/b.py"))
 
 
 def main() -> None:
@@ -355,6 +521,16 @@ def main() -> None:
     t13_degrade()
     t14_smoke_shells()
     t15_init_templates()
+    t20_bypass_real_root()
+    t21_bypass_app_direct()
+    t22_bypass_business_platform()
+    t23_bypass_cross_business()
+    t24_bypass_extension_app()
+    t25_bypass_composition_ok()
+    t26_bypass_utility_ok()
+    t27_bypass_relative_escape()
+    t28_bypass_review_excluded()
+    t29_bypass_deterministic()
     print(f"\nM6 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")
     if FAIL:
         sys.exit(1)
