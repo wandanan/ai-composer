@@ -109,8 +109,11 @@ git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(rest)
 ```bash
 rm -rf dist build *.egg-info
 PYTHONIOENCODING=utf-8 python -m build
+# ⚠️ 必须在提交/tag 之后重新构建: dist 必须与 HEAD 一致（教训: 0.2.1 上传了
+#    skills 命令提交前的旧 wheel, 缺 aic skills 命令 → 0.2.1.post1 修正）
 # wheel 内容检查: 顶层包只有 aic / 无业务应用 / 无真实引擎适配器 / 版本正确
 #   + aic/tools/assets/skills/ 含三平台 aic-paradigm、不含 aic-release
+#   + 新命令/新文件在包内（对照本次提交新增的文件逐一核对）
 # 干净 venv 冒烟: pip install --no-cache-dir ai-composer==X.Y.Z → import aic + aic init
 #   （init 后项目根出现 .claude/.codex/.agent/skills/aic-paradigm）+ 装配
 ```
