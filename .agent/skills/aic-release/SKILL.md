@@ -29,6 +29,34 @@ AKIA[A-Z0-9]{16}|sk-ant-[A-Za-z0-9]{20,}|pypi-[A-Za-z0-9_-]{30,}" \
 
 另外逐文件确认：所有 `config.local.ini` 的 `LLM_API_KEY=` 必须为空。
 
+### 提交内容检查（误提交防护，每次提交前必做）
+
+**发现即提示用户**——不静默处理、不自动改写历史（是否移除/改写由用户决策）。
+
+```bash
+# ① 大文件检查（暂存区 >1MB 的文件）
+git diff --cached --name-only | while read f; do
+  [ -f "$f" ] && sz=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f") \
+    && [ "$sz" -gt 1048576 ] && echo "⚠️ 大文件: $f ($sz bytes)"
+done
+
+# ② 误提交模式检查（库文件/日志/密钥/产物/依赖）
+git diff --cached --name-only | grep -E "\.(db|sqlite|log|pem|key|p12|env|ini)$|\
+config\.local\.ini|__pycache__|\.venv|node_modules|/dist/|/build/|\.egg-info|graph-viz\.html" || true
+
+# ③ 隐私内容检查（暂存区 diff 中的密钥模式）
+git diff --cached | grep -En "sk-[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,}|\
+ghp_[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16}|pypi-[A-Za-z0-9_-]{30,}|LLM_API_KEY=.+[^=]$" || true
+
+# ④ 全历史大文件/敏感文件审计（发布前整体体检）
+git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectsize) %(rest)' \
+  | awk '/^blob/ && $2 > 1048576 {print "⚠️ 历史大文件:", $3, "(" $2 " bytes)"}' | head
+git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(rest)' \
+  | grep -E "\.(db|log|pem|key|env)$|config\.local\.ini" | head
+```
+
+命中任一 → **停下提示用户**：列出文件与原因，等用户决定（移除 / 改写历史 / 重建仓库）。`config.local.ini` 的 `LLM_API_KEY` 必须为空才允许进暂存区。
+
 ### 密钥处理纪律
 
 - **PyPI token 只走环境变量**（`TWINE_USERNAME=__token__` `TWINE_PASSWORD=...`），
