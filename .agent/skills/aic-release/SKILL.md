@@ -93,6 +93,8 @@ git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(rest)
 - 分支: prod（正式基线；历史干净: 每版本一个提交 + 中性文案）
 - 回归: m0~m7 全绿（m1b/m2/m3 真实引擎段用 --skip-real）
 - 隐私扫描通过（见上）
+- skill 变更同步（0.2.0 起）: SKILL.md/教程改动 → 同步 .claude/.codex/.agent 三平台
+  + aic/tools/assets/skills/ 打包副本（init/template 分发源, 排除 aic-release 自身）
 ```
 
 ### 1. 版本号（两处同步）
@@ -107,8 +109,10 @@ git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(rest)
 ```bash
 rm -rf dist build *.egg-info
 PYTHONIOENCODING=utf-8 python -m build
-# wheel 内容检查: 无业务应用 / 无真实引擎适配器 / apps 无顶层 __init__（namespace）/ 版本正确
-# 干净 venv 冒烟: pip install --no-cache-dir ai-composer==X.Y.Z → 导入 + 装配
+# wheel 内容检查: 顶层包只有 aic / 无业务应用 / 无真实引擎适配器 / 版本正确
+#   + aic/tools/assets/skills/ 含三平台 aic-paradigm、不含 aic-release
+# 干净 venv 冒烟: pip install --no-cache-dir ai-composer==X.Y.Z → import aic + aic init
+#   （init 后项目根出现 .claude/.codex/.agent/skills/aic-paradigm）+ 装配
 ```
 
 ### 3. 提交 + tag + 推送
