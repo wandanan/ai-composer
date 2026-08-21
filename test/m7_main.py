@@ -413,7 +413,7 @@ def t21_import_aic() -> None:
     import aic
     from aic.kernel import Context as KernelContext
     check("t21 import aic 统一入口（版本/Context/boot）",
-          aic.__version__ == "0.2.2.post1"
+          aic.__version__ == "0.2.2.post2"
           and aic.Context is KernelContext
           and callable(aic.boot)
           and callable(aic.check_bypass_imports))

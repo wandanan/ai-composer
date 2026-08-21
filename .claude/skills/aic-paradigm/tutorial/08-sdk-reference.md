@@ -10,7 +10,7 @@
 
 ```python
 import aic
-aic.__version__                                   # "0.2.2.post1"
+aic.__version__                                   # "0.2.2.post2"
 from aic import Context, boot, Plugin             # 统一入口（与 aic.kernel 等价）
 from aic.extensions.platform.base import StoragePlugin      # 平台插件
 from aic.extensions.platform.loops import OpenAIEnginePlugin  # 引擎
