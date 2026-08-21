@@ -7,6 +7,33 @@
 
 ---
 
+## 0.2.2.post1（命名空间约定——**含破坏性变更**）
+
+### 框架保留字段一律 `aic_` 前缀（命名空间隔离）
+
+事件 payload 是跨插件字符串契约，`session_id`/`name` 这类裸名极易与业务自身 id/名称
+概念混淆（例: 多章并发时 `llm/stream` 的 session_id 与业务的 chapter_no/task_id 并存难辨）。
+0.2.2.post1 起框架保留字段统一 `aic_` 前缀：
+
+| 位置 | 旧（0.2.2 及之前） | 新（0.2.2.post1） |
+|---|---|---|
+| 事件 payload（内核预登记 + 业务登记） | `session_id` | `aic_session_id` |
+| 引擎工具事件 `tools/pre-/post-execute` | `name` | `aic_name` |
+| `Session` 属性 | `session.session_id` | `session.aic_session_id` |
+| 会话/推送服务签名 | `get/attach/subscribe/publish(session_id)` | 参数名 `aic_session_id`（位置传参不受影响） |
+| AgentLoop `**kw` 约定 | `session_id` | `aic_session_id` |
+
+**破坏性（升级 0.2.2.post1 的既有项目必须同步）**：
+- 业务插件 `register_event(..., {"session_id", ...})` / `emit(..., {"session_id": ...})` → 改 `aic_session_id`
+- 代码里 `session.session_id` → `session.aic_session_id`
+- 调 `run_conversation(..., session_id=sid)` → `aic_session_id=sid`
+- 业务**自己的** id 概念（本地变量、DB 字段、URL 路径参数、对前端的 JSON key）**不用改**——前缀只约束"框架协议字段"，业务值照常放进 `aic_session_id` 字段里传。
+
+**不改**：`delta`/`args`/`result`/`call_id`/`event_type`/`kw`（语义明确不易混淆）；
+`job`（框架代码无此字段，仅是文档层 meta 约定）、`phase`（业务自定义事件字段 + `Phase` 枚举类型名，均非内核事件关键字）。
+
+---
+
 ## 0.2.2（框架机制加固）
 
 > 版本判定：本次主体为审计修复 + 机制补全（bug 修复/加固为 patch 级）。

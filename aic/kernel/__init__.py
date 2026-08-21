@@ -18,7 +18,7 @@ from .imports import check_bypass_imports
 from .layout import check_shell_content, check_shell_layout
 from .plugin import Plugin
 
-__version__ = "0.2.2"
+__version__ = "0.2.2.post1"
 
 __all__ = [
     "Context",

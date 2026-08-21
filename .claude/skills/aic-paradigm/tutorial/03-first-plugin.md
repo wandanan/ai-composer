@@ -116,7 +116,7 @@ PLUGINS = [
 
 ```
 输入 = 会话 meta         create_session({"job": "todo"})
-                         session_id / meta / dir / turn（平台生成）
+                         aic_session_id / meta / dir / turn（平台生成; aic_ 前缀与业务 id 隔离）
 输出 = 两种形态:
   产物通道（文件）        save_artifact(...) —— 要下载/版本化的成果
   数据通道（记录）        ctx.get("storage").put(...) —— 要持续增删改查的记录

@@ -49,7 +49,7 @@ class ReviewPlugin(Plugin):
 
         # 事件契约（0.2.1 事件注册表）: 审查阶段事件声明 + SSE 桥接
         # （pipeline.py 广播 pipeline/phase; StreamPlugin 通道化, 不认识业务事件）
-        ctx.register_event("pipeline/phase", {"session_id", "phase"})
+        ctx.register_event("pipeline/phase", {"aic_session_id", "phase"})
         try:
             ctx.get("stream").bridge("pipeline/phase")
         except ServiceNotFound:

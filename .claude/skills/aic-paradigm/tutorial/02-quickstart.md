@@ -131,9 +131,9 @@ curl POST /api/v1/...
   ↓ ② 拼装          lifespan → build_shell → boot 自动装配
   ↓ ③ 插件接线      apply → register 能力进背包
   ↓ ④ 能力          服务类: 纯逻辑（不直接 IO）
-  ↓ ⑤ 会话/产物     开作业单（session_id/meta/dir/turn）→ 结果落产物或数据通道
+  ↓ ⑤ 会话/产物     开作业单（aic_session_id/meta/dir/turn）→ 结果落产物或数据通道
   ↓ ⑥ 流程/事件     emit 广播（进度可观察）
-响应 {"session_id": "...", ...}
+响应 {"aic_session_id": "...", ...}   # 框架保留字段 aic_ 前缀; 业务自己的 key 随意
 ```
 
 ## 下一步

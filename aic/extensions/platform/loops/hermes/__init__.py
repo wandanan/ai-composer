@@ -66,7 +66,7 @@ class HermesLoop:
         from run_agent import AIAgent  # 引擎内部才 import hermes
 
         ctx = self.ctx
-        session_id = kw.get("session_id", "")
+        aic_session_id = kw.get("aic_session_id", "")
 
         def _emit(event: str, payload: dict) -> None:
             if ctx is not None:
@@ -87,12 +87,12 @@ class HermesLoop:
             # ── hermes 内部事件 → 平台事件广播（payload 对齐内核事件注册表）──
             thinking_callback=lambda text: _emit("agent/thinking", {"delta": text}),
             stream_delta_callback=lambda delta, **_: _emit(
-                "llm/stream", {"session_id": session_id, "delta": delta}),
+                "llm/stream", {"aic_session_id": aic_session_id, "delta": delta}),
             tool_start_callback=lambda cid, name, args, **_: _emit(
-                "tools/pre-execute", {"call_id": cid, "name": name, "args": args}),
+                "tools/pre-execute", {"call_id": cid, "aic_name": name, "args": args}),
             tool_complete_callback=lambda cid, name, args, result, **_: _emit(
                 "tools/post-execute",
-                {"call_id": cid, "name": name, "result": str(result)[:200]}),
+                {"call_id": cid, "aic_name": name, "result": str(result)[:200]}),
             # 子代理/工具进度（审查场景 SSE: subagent_start/tool_started 等）
             tool_progress_callback=lambda event_type, **tkw: _emit(
                 "agent/tool_progress", {"event_type": event_type, "kw": tkw}),

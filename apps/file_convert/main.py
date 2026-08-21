@@ -49,5 +49,5 @@ async def convert(req: ConvertReq):
     session = SHELL.get("sessions").create_session({"job": "convert"})
     result = SHELL.get("convertPipeline").run(
         session, req.content, req.src_type, req.dst_type)
-    return {"session_id": session.session_id, **result}
+    return {"session_id": session.aic_session_id, **result}
 

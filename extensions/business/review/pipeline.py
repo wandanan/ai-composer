@@ -19,7 +19,7 @@ class ReviewPipeline:
 
     def _phase(self, session_id: str, name: str) -> None:
         # 事件已在 ReviewPlugin 登记（pipeline/phase）——契约内 emit, 大声失败
-        self.ctx.emit("pipeline/phase", {"phase": name, "session_id": session_id})
+        self.ctx.emit("pipeline/phase", {"phase": name, "aic_session_id": session_id})
 
     def run(self, session_id: str, skill_text: str = "",
             knowledge_scope: list | None = None, user_message: str = "",

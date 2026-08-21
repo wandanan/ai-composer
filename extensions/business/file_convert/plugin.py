@@ -53,7 +53,7 @@ class ConvertPipeline:
 
         name = f"output_{session.turn + 1}.{dst_type}"
         save_artifact(session.dir, "output", name, result)
-        self.ctx.emit("convert/done", {"session_id": session.session_id,
+        self.ctx.emit("convert/done", {"aic_session_id": session.aic_session_id,
                                        "output": name})
 
         return {"output": name, "chars": len(result), "dst_type": dst_type}
@@ -71,7 +71,7 @@ class FileConvertPlugin(Plugin):
         ctx.register("convertPipeline", ConvertPipeline(ctx))
 
         # 事件契约（0.2.1 事件注册表）: 业务事件声明 + SSE 桥接
-        ctx.register_event("convert/done", {"session_id", "output"})
+        ctx.register_event("convert/done", {"aic_session_id", "output"})
         try:
             ctx.get("stream").bridge("convert/done")
         except ServiceNotFound:

@@ -33,7 +33,7 @@ class BatchRunner:
             for fut in as_completed(futures):
                 session = futures[fut]
                 try:
-                    results[session.session_id] = fut.result()
+                    results[session.aic_session_id] = fut.result()
                 except Exception as exc:  # 单个失败不阻断其余
-                    results[session.session_id] = {"error": str(exc)}
+                    results[session.aic_session_id] = {"error": str(exc)}
         return results

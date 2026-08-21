@@ -66,11 +66,11 @@ async def create_conversation(req: CreateConversationReq):
     shell = SHELL
     session = shell.get("sessions").create_session({"project": req.project_info})
     svc = shell.get("stream")
-    q, snapshot = svc.subscribe(session.session_id)
+    q, snapshot = svc.subscribe(session.aic_session_id)
 
     async def gen():
         try:
-            yield _sse("session_created", {"session_id": session.session_id,
+            yield _sse("session_created", {"session_id": session.aic_session_id,
                                            "task_status": "queued"})
             for item in snapshot:                       # 防御性回放（通常为空）
                 yield _sse(item["event"], item["data"])
@@ -80,7 +80,7 @@ async def create_conversation(req: CreateConversationReq):
             jobs.register_task(TASK_RUN_PIPELINE, run_pipeline)
             jobs.register_task(TASK_REVISE, revise)
             jobs.enqueue(TASK_RUN_PIPELINE,
-                         [session.session_id, req.project_info, req.chapters],
+                         [session.aic_session_id, req.project_info, req.chapters],
                          queue="mvp")
             while True:
                 try:
@@ -92,7 +92,7 @@ async def create_conversation(req: CreateConversationReq):
                 if item["event"] == "pipeline/done":
                     break
         finally:
-            svc.unsubscribe(session.session_id, q)
+            svc.unsubscribe(session.aic_session_id, q)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 

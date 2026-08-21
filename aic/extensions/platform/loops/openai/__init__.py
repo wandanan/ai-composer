@@ -3,7 +3,7 @@
 实现 AgentLoop 协议（aic.extensions.platform.loops.AgentLoop）:
   run_conversation(user_message, conversation_history=None, **kw) -> dict
     - system_prompt / toolsets 走 **kw（协议约定: 引擎是"哑的", 不组装业务 prompt）
-    - session_id 走 **kw: 流式 delta 事件 payload 携带它（事件契约: 须带 session_id）
+    - session_id 走 **kw 的 aic_session_id: 流式 delta 事件 payload 携带它（事件契约: 须带 aic_session_id）
   流式: stream=True 逐片解析, 每片 emit "llm/stream" 事件（delta 字段, 与 hermes 事件名一致）
 
 兼容任何 OpenAI Chat Completions 兼容 API（OpenAI / DeepSeek / 通义 / Kimi ...）。
@@ -40,10 +40,10 @@ class OpenAILoop:
     ) -> dict:
         """执行一轮对话, 返回 {final_response, messages, token_usage}。
 
-        角色提示词走 kw["system_prompt"]; 流式 delta 事件带 kw["session_id"]。
+        角色提示词走 kw["system_prompt"]; 流式 delta 事件带 kw["aic_session_id"]。
         """
         system_prompt = kw.get("system_prompt", "")
-        session_id = kw.get("session_id", "")
+        aic_session_id = kw.get("aic_session_id", "")
 
         messages: list[dict] = []
         if system_prompt:
@@ -63,7 +63,7 @@ class OpenAILoop:
             method="POST")
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
-                text = self._drain_stream(resp, session_id)
+                text = self._drain_stream(resp, aic_session_id)
         except urllib.error.HTTPError as e:
             raise RuntimeError(
                 f"[openai] 引擎调用失败 HTTP {e.code}: "
@@ -78,7 +78,7 @@ class OpenAILoop:
             "token_usage": {"input_tokens": 0, "output_tokens": len(text)},
         }
 
-    def _drain_stream(self, resp, session_id: str) -> str:
+    def _drain_stream(self, resp, aic_session_id: str) -> str:
         """逐行解析 SSE（data: {...}）, 每片 delta 广播 llm/stream 事件。"""
         parts: list[str] = []
         for raw in resp:
@@ -98,7 +98,7 @@ class OpenAILoop:
                     parts.append(delta)
                     if self.ctx is not None:
                         self.ctx.emit("llm/stream",
-                                      {"session_id": session_id, "delta": delta})
+                                      {"aic_session_id": aic_session_id, "delta": delta})
         return "".join(parts)
 
     def close(self) -> None:

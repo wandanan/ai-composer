@@ -508,13 +508,14 @@ def t30_stream_bridge() -> None:
     boot(app, [StreamPlugin()])
     svc = app.get("stream")
     check("t30 StreamPlugin 零业务预置桥接", "pipeline/phase" not in app._listeners)
-    app.register_event("my/progress", {"session_id", "pct"})
+    # 桥接路由读框架保留字段 aic_session_id（0.2.3 命名约定: 值 = 业务会话标识）
+    app.register_event("my/progress", {"aic_session_id", "pct"})
     svc.bridge("my/progress")
     q, _ = svc.subscribe("s1")
-    app.emit("my/progress", {"session_id": "s1", "pct": 50})
+    app.emit("my/progress", {"aic_session_id": "s1", "pct": 50})
     got = q.get(timeout=1)
     check("t30 业务声明桥接生效（SSE 收到事件）",
-          got["event"] == "my/progress" and got["data"]["session_id"] == "s1")
+          got["event"] == "my/progress" and got["data"]["aic_session_id"] == "s1")
 
 
 def t29_bypass_deterministic() -> None:

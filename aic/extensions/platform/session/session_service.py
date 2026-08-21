@@ -20,9 +20,13 @@ class SessionNotFound(KeyError):
 
 @dataclass
 class Session:
-    """一个业务会话 = 一个完整工作区 + 元数据 + 轮次。"""
+    """一个业务会话 = 一个完整工作区 + 元数据 + 轮次。
 
-    session_id: str
+    aic_session_id（0.2.2.post1 命名约定）: 框架会话标识一律 aic_ 前缀——
+    插件侧访问 session.aic_session_id, 与业务自身的 id 概念从命名空间隔离。
+    """
+
+    aic_session_id: str
     dir: str          # 会话工作区目录（产物落盘于此）
     meta: dict        # 业务元数据（方案类型/项目名等，JSON 化后由业务解释）
     turn: int = 0     # 轮次计数（首轮 + 追问轮）
@@ -44,27 +48,27 @@ class SessionService:
         sid = uuid.uuid4().hex[:12]
         sdir = os.path.join(self._runtime_dir, sid)
         os.makedirs(sdir, exist_ok=True)
-        session = Session(session_id=sid, dir=sdir, meta=meta or {})
+        session = Session(aic_session_id=sid, dir=sdir, meta=meta or {})
         self._sessions[sid] = session
         return session
 
-    def get(self, session_id: str) -> Session:
-        if session_id not in self._sessions:
-            raise SessionNotFound(session_id)
-        return self._sessions[session_id]
+    def get(self, aic_session_id: str) -> Session:
+        if aic_session_id not in self._sessions:
+            raise SessionNotFound(aic_session_id)
+        return self._sessions[aic_session_id]
 
-    def attach(self, session_id: str, meta: dict | None = None) -> Session:
-        """重建会话（跨进程：worker/线程任务端按 session_id 恢复工作区）。
+    def attach(self, aic_session_id: str, meta: dict | None = None) -> Session:
+        """重建会话（跨进程：worker/线程任务端按 aic_session_id 恢复工作区）。
 
         runtime_dir 默认一致（tempdir/kit_sessions），API 进程创建、执行端 attach。
         """
-        if session_id in self._sessions:
-            return self._sessions[session_id]
-        sdir = os.path.join(self._runtime_dir, session_id)
+        if aic_session_id in self._sessions:
+            return self._sessions[aic_session_id]
+        sdir = os.path.join(self._runtime_dir, aic_session_id)
         if not os.path.isdir(sdir):
-            raise SessionNotFound(session_id)
-        session = Session(session_id=session_id, dir=sdir, meta=meta or {})
-        self._sessions[session_id] = session
+            raise SessionNotFound(aic_session_id)
+        session = Session(aic_session_id=aic_session_id, dir=sdir, meta=meta or {})
+        self._sessions[aic_session_id] = session
         return session
 
     def start_turn(self, session: Session) -> int:

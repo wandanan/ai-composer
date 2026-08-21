@@ -45,7 +45,7 @@ class WriterPipeline:
     def _phase(self, session, name: str) -> None:
         self._phase_stats[name] = time.time()   # 可观测性: 阶段耗时统计
         self.ctx.emit("pipeline/phase", {"phase": name,
-                                         "session_id": session.session_id})
+                                         "aic_session_id": session.aic_session_id})
 
     def _compute_durations(self) -> dict:
         """各阶段耗时（秒）：相邻阶段起点差，末段到当前时间。"""
@@ -91,7 +91,7 @@ class WriterPipeline:
             )["final_response"]
             save_artifact(sdir, "chapters", f"{idx + 1:02d}_{name}.md", content)
             self.ctx.emit("chapter/status", {"chapter": name, "status": "done",
-                                             "session_id": session.session_id})
+                                             "aic_session_id": session.aic_session_id})
             return name
 
         with ThreadPoolExecutor(max_workers=min(CHAPTER_CONCURRENCY, len(chapters))) as ex:
@@ -107,7 +107,7 @@ class WriterPipeline:
         self._phase(session, "render")
         outputs = self._render(session, outline, merged, version)
 
-        self.ctx.emit("pipeline/done", {"session_id": session.session_id,
+        self.ctx.emit("pipeline/done", {"aic_session_id": session.aic_session_id,
                                         "version": version})
 
         return {
@@ -160,7 +160,7 @@ class WriterPipeline:
         )["final_response"]
         save_artifact(sdir, "chapters", chapter_file, content)
         self.ctx.emit("chapter/status", {"chapter": chapter_file, "status": "revised",
-                                         "session_id": session.session_id})
+                                         "aic_session_id": session.aic_session_id})
 
         version = next_draft_version(sdir, "merged", "draft_v")
         merged = self._merge(loop, sdir, sp, ts)
@@ -169,7 +169,7 @@ class WriterPipeline:
         outline = read_artifact(sdir, "outline", "outline.md")
         outputs = self._render(session, outline, merged, version)
 
-        self.ctx.emit("pipeline/done", {"session_id": session.session_id,
+        self.ctx.emit("pipeline/done", {"aic_session_id": session.aic_session_id,
                                         "version": version})
 
         return {

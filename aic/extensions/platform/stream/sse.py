@@ -2,10 +2,10 @@
 
 职责：
 - 订阅内核事件（pipeline/phase、chapter/status、pipeline/done）
-- 按 session_id 路由推送给 SSE 订阅者
+- 按 aic_session_id 路由推送给 SSE 订阅者
 - 双通道：in-process 队列（同进程执行路径）+ Redis pub/sub（Celery worker 跨进程）
 
-事件协议约定：内核事件 payload 必须携带 session_id（pipeline 已保证）。
+事件协议约定：内核事件 payload 必须携带 aic_session_id（pipeline 已保证）。
 """
 from __future__ import annotations
 
@@ -52,52 +52,52 @@ class StreamService:
     def bridge(self, event_name: str) -> None:
         """业务声明: 事件 → 会话推送（0.2.1 平台通道化——StreamPlugin 不认识业务事件）。
 
-        payload 须携带 session_id（否则 publish 警告跳过）。由业务插件 apply 调用。
+        payload 须携带 aic_session_id（否则 publish 警告跳过）。由业务插件 apply 调用。
         """
         if self._ctx is None:
             raise RuntimeError("[stream] bridge 需要 ctx（StreamPlugin 构造注入）")
         self._ctx.on(event_name,
-                     lambda p: self.publish(p.get("session_id", ""), event_name, p),
+                     lambda p: self.publish(p.get("aic_session_id", ""), event_name, p),
                      EventMode.EMIT)
 
     # ── 订阅（SSE 端点侧）──
 
-    def subscribe(self, session_id: str) -> tuple[queue.Queue, list[dict]]:
+    def subscribe(self, aic_session_id: str) -> tuple[queue.Queue, list[dict]]:
         """订阅会话事件；返回 (实时队列, 已发生事件快照)。"""
         q: queue.Queue = queue.Queue()
         with self._lock:
-            self._subs.setdefault(session_id, []).append(q)
-            snapshot = list(self._history.get(session_id, []))
+            self._subs.setdefault(aic_session_id, []).append(q)
+            snapshot = list(self._history.get(aic_session_id, []))
         return q, snapshot
 
-    def unsubscribe(self, session_id: str, q: queue.Queue) -> None:
+    def unsubscribe(self, aic_session_id: str, q: queue.Queue) -> None:
         with self._lock:
             try:
-                self._subs[session_id].remove(q)
+                self._subs[aic_session_id].remove(q)
             except ValueError:
                 pass
 
     # ── 发布（事件桥接侧）──
 
-    def publish(self, session_id: str, event: str, data: dict) -> None:
-        if not session_id:
-            _log.warning("[stream] publish 跳过: 事件未携带 session_id (event=%r)", event)
+    def publish(self, aic_session_id: str, event: str, data: dict) -> None:
+        if not aic_session_id:
+            _log.warning("[stream] publish 跳过: 事件未携带 aic_session_id (event=%r)", event)
             return
         payload = {"event": event, "data": data}
 
         # 通道 1: in-process 队列（同进程: 线程降级路径）+ 事件缓冲
         with self._lock:
-            hist = self._history.setdefault(session_id, [])
+            hist = self._history.setdefault(aic_session_id, [])
             hist.append(payload)
             if len(hist) > self._history_limit:
                 del hist[:len(hist) - self._history_limit]
-            for q in list(self._subs.get(session_id, [])):
+            for q in list(self._subs.get(aic_session_id, [])):
                 q.put(payload)
 
         # 通道 2: Redis pub/sub（跨进程: Celery worker 路径; 惰性单连接）
         if self.redis_url:
             try:
-                self._redis().publish(f"sse:{session_id}",
+                self._redis().publish(f"sse:{aic_session_id}",
                                       json.dumps(payload, ensure_ascii=False))
             except Exception:
                 pass  # Redis 不可用时 in-process 兜底

@@ -41,10 +41,11 @@ class WriterPlugin(Plugin):
             pass  # 渲染注册表未挂载 → 跳过, md 兜底
 
         # 事件契约（0.2.1 事件注册表）: 声明流水线事件 + SSE 桥接
-        # （平台 StreamPlugin 通道化——不认识业务事件, 桥接由业务声明）
-        for evt, fields in (("pipeline/phase", {"session_id", "phase"}),
-                            ("chapter/status", {"session_id", "chapter", "status"}),
-                            ("pipeline/done", {"session_id", "version"})):
+        # （平台 StreamPlugin 通道化——不认识业务事件, 桥接由业务声明;
+        #   aic_session_id 是框架保留字段, 值 = 业务的会话标识）
+        for evt, fields in (("pipeline/phase", {"aic_session_id", "phase"}),
+                            ("chapter/status", {"aic_session_id", "chapter", "status"}),
+                            ("pipeline/done", {"aic_session_id", "version"})):
             ctx.register_event(evt, fields)
         try:
             stream = ctx.get("stream")

@@ -12,10 +12,12 @@
 from __future__ import annotations
 
 # 引擎协议事件（llm/stream 由 OpenAI/hermes 引擎 emit; hermes 另有 4 个回调事件）
+# 命名约定（0.2.2.post1）: 事件 payload 是跨插件字符串契约, 框架保留字段一律 aic_ 前缀——
+# 与业务事件的字段（chapter_no/name/job 等）从命名空间隔离, 杜绝同名字段互相混淆。
 EVENT_REGISTRY: dict[str, dict] = {
-    "llm/stream":          {"payload": {"session_id", "delta"}},
+    "llm/stream":          {"payload": {"aic_session_id", "delta"}},
     "agent/thinking":      {"payload": {"delta"}},
-    "tools/pre-execute":   {"payload": {"call_id", "name", "args"}},
-    "tools/post-execute":  {"payload": {"call_id", "name", "result"}},
+    "tools/pre-execute":   {"payload": {"call_id", "aic_name", "args"}},
+    "tools/post-execute":  {"payload": {"call_id", "aic_name", "result"}},
     "agent/tool_progress": {"payload": {"event_type", "kw"}},
 }

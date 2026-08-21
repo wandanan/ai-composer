@@ -88,7 +88,7 @@ async def lifespan(_: FastAPI):
 @app.post("/api/v1/todos")
 async def add_todo(req: TodoReq):
     session = SHELL.get("sessions").create_session({"job": "todo"})
-    result = SHELL.get("todos").add(session.session_id, req.title)   # 调能力
+    result = SHELL.get("todos").add(session.aic_session_id, req.title)   # 调能力
     return result
 ```
 

@@ -116,12 +116,12 @@ ToolHandler      name / toolset / schema + handle(args, **kw) -> str（业务工
 KnowledgeProvider  scope(task_id, meta) -> list[str]（知识注入）
 AgentLoop        run_conversation(user_message, conversation_history=None, **kw) -> dict
                  → 返回 {final_response, messages, token_usage, ...}; close() 释放资源
-                 流式: 引擎逐片 emit "llm/stream" 事件（payload: {session_id, delta}）,
-                 session_id 来自 **kw 的 session_id 参数——SSE 打字机效果靠它
+                 流式: 引擎逐片 emit "llm/stream" 事件（payload: {aic_session_id, delta}）,
+                 aic_session_id 来自 **kw 的 aic_session_id 参数——SSE 打字机效果靠它
 ```
 
 **AgentLoop 消费纪律**：每次调用时 `ctx.get("agentLoop")`，不缓存引用 → 引擎可任意替换。
-**引擎是"哑的"**：角色提示词/工具集由调用方经 `**kw` 传入（`system_prompt` / `toolsets` / `session_id`），
+**引擎是"哑的"**：角色提示词/工具集由调用方经 `**kw` 传入（`system_prompt` / `toolsets` / `aic_session_id`），
 引擎不组装业务 prompt——换引擎业务零改动。
 
 ## 3. 平台服务表（消费方永远 `ctx.get(key)`）
@@ -134,15 +134,15 @@ AgentLoop        run_conversation(user_message, conversation_history=None, **kw)
 | cache | `CachePlugin(impl=None)` | `set(key, value, ttl=None)` / `get(key) -> str\|None` / `set_nx(key, value, ttl=None) -> bool`（原子锁）/ `delete(key)`；MemoryCache（默认）/ RedisCache（多进程必须） |
 | jobs | `JobsPlugin(impl=None, app_pkg="<应用名>")` | `register_task(name, fn)` / `enqueue(task_name, args=None, queue="default") -> task_id` / `result(task_id, timeout=None)` / `health() -> bool`；Thread/Celery/Failover 队列；**app_pkg 触发任务名协议校验** |
 | db | `DbPlugin(url=None)` | `engine` / `session()`（SQLAlchemy Session）/ `create_all(base)`；模块函数 `database_url() -> str` |
-| sessions | `SessionPlugin(runtime_dir=None)` | `create_session(meta=None) -> Session` / `get(session_id)` / `attach(session_id, meta=None)`（跨进程重建）/ `start_turn(session) -> int`；Session 字段：`session_id` / `dir`（工作区）/ `meta` / `turn`；多机部署 `runtime_dir` 传共享目录 |
+| sessions | `SessionPlugin(runtime_dir=None)` | `create_session(meta=None) -> Session` / `get(session_id)` / `attach(aic_session_id, meta=None)`（跨进程重建）/ `start_turn(session) -> int`；Session 字段：`aic_session_id` / `dir`（工作区）/ `meta` / `turn`；多机部署 `runtime_dir` 传共享目录 |
 | renderers | `RenderPlugin()` | `register(renderer) -> disposer` / `get(name)` / `has(name)` / `names()`；渲染器协议：`name` + `render(session, *, merged, outline, version, **kw) -> 输出文件名` |
 | tasks | `TasksPlugin()` | 聚合键（多业务插件共存）: `ctx.effect(ctx.get("tasks").register(XxxTask()))` 登记（disposer 撤销）/ `get(id)` / `[id]` / `in` / `ids()`；**勿 `ctx.register("tasks", dict)`——同 key 覆盖, 共挂互删** |
-| stream | `StreamPlugin(redis_url=None)` | `subscribe(session_id) -> (实时队列, 事件快照)` / `unsubscribe(session_id, q)` / `publish(session_id, event, data)` / `bridge(event_name)`（业务声明事件→SSE 桥接）；`redis_enabled`（跨进程走 Redis pub/sub） |
+| stream | `StreamPlugin(redis_url=None)` | `subscribe(aic_session_id) -> (实时队列, 事件快照)` / `unsubscribe(aic_session_id, q)` / `publish(aic_session_id, event, data)` / `bridge(event_name)`（业务声明事件→SSE 桥接）；`redis_enabled`（跨进程走 Redis pub/sub） |
 | sandbox | `SandboxPlugin()` | `set_workspace/get_workspace/clear_workspace` / `lock_dir_readonly(path)` / `unlock_dir(path)` / `sanitize_filename(filename, max_length=200)` |
 | extract | `ExtractPlugin(impl=None)` | `extract(content, filename, use_ocr=False, progress_callback=None, **kw) -> str`；模块函数 `extract_document(...)`；LocalExtractor 支持 docx/pdf/MinerU |
 | agentLoop | `FakeLoop(name, replies, delay)`（无配置默认）/ `OpenAIEnginePlugin()`（配好 `LLM_API_KEY` 即真引擎） | AgentLoop 协议（见 §2）；换引擎 = 换提供 agentLoop 的插件（见 §8） |
 
-**事件契约**：事件先登记再 emit（业务插件 apply 里 `ctx.register_event(name, fields)`; 未登记/字段超集 → RuntimeError）；payload 须携带 `session_id`（stream 依赖它路由推送）。`StreamPlugin` 是通用通道, 不认识业务事件——**桥接由业务声明** `ctx.get("stream").bridge(event)`（见 §5）。
+**事件契约**：事件先登记再 emit（业务插件 apply 里 `ctx.register_event(name, fields)`; 未登记/字段超集 → RuntimeError）；payload 须携带 `aic_session_id`（stream 依赖它路由推送）。`StreamPlugin` 是通用通道, 不认识业务事件——**桥接由业务声明** `ctx.get("stream").bridge(event)`（见 §5）。
 
 ## 4. 产物通道（extensions.platform.session.artifacts）
 
@@ -210,7 +210,7 @@ async def lifespan(_: FastAPI):
 @app.post("/api/v1/todos")
 async def add_todo(req: TodoReq):
     session = SHELL.get("sessions").create_session({"job": "todo"})
-    result = SHELL.get("todos").add(session.session_id, req.title)
+    result = SHELL.get("todos").add(session.aic_session_id, req.title)
     return result
 ```
 
@@ -246,8 +246,8 @@ class MyPlugin(Plugin):
 
     def apply(self, ctx: Context):
         # ① 事件契约登记（未登记事件 emit 时 RuntimeError——大声失败）
-        ctx.register_event("my/progress", {"session_id", "pct"})
-        # ② 声明桥接: 事件 → 会话推送（payload 必须携带 session_id）
+        ctx.register_event("my/progress", {"aic_session_id", "pct"})
+        # ② 声明桥接: 事件 → 会话推送（payload 必须携带 aic_session_id）
         ctx.get("stream").bridge("my/progress")
         ctx.register("my", MyService(...))
 ```
@@ -263,16 +263,16 @@ async def create_discussion(req: DiscussReq):
     shell = SHELL
     session = shell.get("sessions").create_session({"topic": req.topic})
     svc = shell.get("stream")
-    q, snapshot = svc.subscribe(session.session_id)   # 先订阅, 后派发——事件不丢
+    q, snapshot = svc.subscribe(session.aic_session_id)   # 先订阅, 后派发——事件不丢
 
     async def gen():
         try:
-            yield _sse("session_created", {"session_id": session.session_id})
+            yield _sse("session_created", {"session_id": session.aic_session_id})
             for item in snapshot:                      # 防御性回放（通常为空）
                 yield _sse(item["event"], item["data"])
             jobs = shell.get("jobs")
             jobs.register_task(TASK_RUN, run_task)     # 双路径: 见上节
-            jobs.enqueue(TASK_RUN, [session.session_id])
+            jobs.enqueue(TASK_RUN, [session.aic_session_id])
             while True:
                 try:
                     item = await asyncio.to_thread(q.get, timeout=15)
@@ -283,7 +283,7 @@ async def create_discussion(req: DiscussReq):
                 if item["event"] == "my/done":
                     break
         finally:
-            svc.unsubscribe(session.session_id, q)     # 断连清理
+            svc.unsubscribe(session.aic_session_id, q)     # 断连清理
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 ```
@@ -348,11 +348,11 @@ class RoundtableService:
         self._loop, self._ctx = loop, ctx
 
     def turn(self, session, speaker: str, question: str) -> str:
-        self._ctx.emit("roundtable/turn", {"session_id": session.session_id,
+        self._ctx.emit("roundtable/turn", {"aic_session_id": session.aic_session_id,
                                             "speaker": speaker})
         result = self._loop.run_conversation(
             question, system_prompt=ROLE_PROMPTS[speaker], toolsets=[])
-        self._ctx.emit("roundtable/reply", {"session_id": session.session_id,
+        self._ctx.emit("roundtable/reply", {"aic_session_id": session.aic_session_id,
                                              "speaker": speaker,
                                              "reply": result["final_response"]})
         return result["final_response"]
@@ -366,7 +366,7 @@ class RoundtablePlugin(Plugin):
         svc = ctx.get("stream")
         for ev in ("roundtable/turn", "roundtable/reply"):
             ctx.on(ev, lambda p, e=ev: svc.publish(
-                p.get("session_id", ""), e, p), EventMode.EMIT)
+                p.get("aic_session_id", ""), e, p), EventMode.EMIT)
         ctx.register("roundtable", RoundtableService(ctx.get("agentLoop"), ctx))
 ```
 
@@ -440,9 +440,9 @@ PLUGINS = [
 
 ```
 协议形状   run_conversation(user_message, conversation_history=None, **kw) -> dict
-**kw 约定  system_prompt（角色提示词）/ toolsets / session_id（流式事件用）
+**kw 约定  system_prompt（角色提示词）/ toolsets / aic_session_id（流式事件用）
 返回       {final_response, messages, token_usage, ...}
-流式       逐片 ctx.emit("llm/stream", {"session_id": ..., "delta": ...}) —— 事件名与内置引擎一致
+流式       逐片 ctx.emit("llm/stream", {"aic_session_id": ..., "delta": ...}) —— 事件名与内置引擎一致
 close()    释放引擎资源
 ```
 
@@ -459,10 +459,10 @@ class MyEngineLoop:
 
     def run_conversation(self, user_message, conversation_history=None, **kw):
         system_prompt = kw.get("system_prompt", "")
-        session_id = kw.get("session_id", "")
+        aic_session_id = kw.get("aic_session_id", "")
         ...                                        # 调你的引擎 API（流式逐片）
         if self.ctx is not None:
-            self.ctx.emit("llm/stream", {"session_id": session_id, "delta": chunk})
+            self.ctx.emit("llm/stream", {"aic_session_id": aic_session_id, "delta": chunk})
         return {"final_response": text, "messages": [...], "token_usage": {...}}
 
     def close(self) -> None:
