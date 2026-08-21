@@ -8,7 +8,7 @@
     extensions/business/{name}/     业务插件骨架（AgentTask + Plugin 引导注释）
     → 打印插件设计三步法引导
 
-参考实现: apps/mvp/（完整示例, 不复制——新应用从精简壳起步）
+参考实现: aic init 生成的精简壳（新应用从精简壳起步）
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ async def health():
 
 APP_SHELL = '''"""apps/{name}/shell.py — 装配（aic.tools.init 生成）。
 
-与 apps/mvp/shell.py 同构: 默认 FakeLoop + boot 插件组合（引擎插件挂载即覆盖）。
+与标准壳同构: 默认 FakeLoop + boot 插件组合（引擎插件挂载即覆盖）。
 """
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ APP_TASKS = '''"""apps/{name}/tasks.py — 任务定义（双路径: 线程内�
 
 空档位骨架（aic.tools.init 生成）: 同步应用可不注册任何任务, 但文件必须存在
 （壳布局契约: 装配组 tasks.py/worker.py 必须齐全）。
-需要异步任务时（参考 apps/mvp/tasks.py）:
+需要异步任务时（参考 aic init 生成骨架 + 08-sdk §5）:
   1. 定义任务名常量 TASK_X = "{name}.x"
   2. 实现 make_inline_tasks(shell) 线程降级路径（闭包捕获 shell）
   3. worker.py 用 @celery_app.task(name=TASK_X) 注册同名任务（任务名协议: 双侧同名）
@@ -156,7 +156,7 @@ APP_WORKER = '''"""apps/{name}/worker.py — Celery worker 入口（空档位骨
 
 无任务注册时的状态:
 - celery_app 存在（任务名协议的内省目标: 本模块内 @celery_app.task 注册的任务名）
-- 不注册任何业务任务; 需要异步任务时按 apps/mvp/worker.py 补 @celery_app.task
+- 不注册任何业务任务; 需要异步任务时按标准壳补 @celery_app.task
 
 启动（需 Redis broker 可用）:
     python -m apps.{name}.worker

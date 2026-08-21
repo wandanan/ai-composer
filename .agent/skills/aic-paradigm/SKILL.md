@@ -220,7 +220,8 @@ aic init my_biz                       # ⑥ 在模板上加新应用
 ## 验证
 
 ```
-python test/m0_main.py ... m7_main.py   # 回归（内核/引擎/沙箱/流水线/生产化/契约/工具）
+python test/m0_main.py m1c_main.py m4b_main.py m4c_main.py \
+       m5_main.py m6_main.py m7_main.py   # 回归（内核/引擎/基础设施/契约/工具）
 ```
 
 改动后至少跑相关回归：内核改动跑 m0；壳/装配改动跑 m6；工具改动跑 m7。

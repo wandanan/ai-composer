@@ -10,7 +10,7 @@
 
 ```python
 import aic
-aic.__version__                                   # "0.2.2"
+aic.__version__                                   # "0.2.2.post1"
 from aic import Context, boot, Plugin             # 统一入口（与 aic.kernel 等价）
 from aic.extensions.platform.base import StoragePlugin      # 平台插件
 from aic.extensions.platform.loops import OpenAIEnginePlugin  # 引擎
@@ -296,7 +296,7 @@ async def create_discussion(req: DiscussReq):
 断连清理          finally 里 unsubscribe; 15s 心跳保活（q.get timeout）
 重连场景          独立流端点同模式: subscribe → 回放 snapshot → 继续; 已完成直接断开
 跨进程            StreamPlugin(redis_url=...) 时事件经 Redis pub/sub 双通道,
-                  端点侧 daemon 线程桥回队列（见安装包 apps/mvp/main.py 参考实现）
+                  端点侧 daemon 线程桥回队列（见 aic init 骨架 + 本教程 §5 双路径）
 ```
 
 ## 6. 最小业务插件（照抄骨架）
@@ -529,7 +529,7 @@ UTILITY_MODULES = (
 
 ### 边界
 
-- review 精确到 `apps/review/main.py` + `apps/review/tasks.py` 排除（壳 ORM 直连 + 任务名常量 re-export, 遗留架构债——不再整线豁免）
+- 默认无豁免（整仓按契约扫描）; 业务遗留债经 KIT_EXCLUDED_DIRS 精确到文件豁免
 - extensions→tools 不在检查范围（sandbox 补丁/工具注册是 CLI 层附属，设计上反向）
 - `importlib.import_module(f"apps.{app_pkg}.worker")` 等动态字符串形态不在此检查（运行时内省，任务名协议另管）
 

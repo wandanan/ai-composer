@@ -2,7 +2,7 @@
 
 空档位骨架（aic.tools.init 生成）: 同步应用可不注册任何任务, 但文件必须存在
 （壳布局契约: 装配组 tasks.py/worker.py 必须齐全）。
-需要异步任务时（参考 apps/mvp/tasks.py）:
+需要异步任务时（参考 aic init 生成骨架 + 08-sdk §5）:
   1. 定义任务名常量 TASK_X = "file_convert.x"
   2. 实现 make_inline_tasks(shell) 线程降级路径（闭包捕获 shell）
   3. worker.py 用 @celery_app.task(name=TASK_X) 注册同名任务（任务名协议: 双侧同名）

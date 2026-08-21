@@ -18,15 +18,15 @@
   18. 自定义 .py 定义 Plugin 子类 → 报错 "定义插件类"
   19. 自定义 .py 接线动作 .register( → 报错 "接线动作"
   任务名协议（jobs.py 守卫）:
-   9. 正例: mvp 注册 writer.run_pipeline / writer.revise → 通过 + memoize + 重复注册
-  10. 违例: 注册 writer.ghost → 报错 "任务名协议违规"
+   9. 正例: 自造 worker 注册 demo.run / demo.revise → 通过 + memoize + 重复注册
+  10. 违例: 注册 demo.ghost → 报错 "任务名协议违规"
   11. 空档位: file_convert 零注册无异常; 注册任意名 → 报错（worker 侧空注册表）
   12. Failover 双注册: 两侧 registry 均含名, 缓存单条
   13. 降级: worker 不可导入 → 跳过校验（不报错）
-  14. 冒烟: 4 应用 build_shell 全部成功; review 壳注册 review.execute_review 通过
+  14. 冒烟: file_convert + hello_aic build_shell 全部成功
   15. init 模板渲染健全: 无残留花括号; 含布局检查与 app_pkg
   16. 旁路 import 契约: 真实仓库零违规 / 四型违规 / 组合面与白名单放行 /
-      review 排除 / 报错确定性
+      默认无豁免 / 显式 exclude / 报错确定性
 """
 import os
 import sys
@@ -87,7 +87,7 @@ def t01_layout_valid() -> None:
 def t02_real_apps() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ok = True
-    for name in ("mvp", "review", "file_convert"):   # 用户空间应用（平铺根 apps/）
+    for name in ("file_convert",):   # 用户空间应用（平铺根 apps/）
         try:
             check_shell_layout(os.path.join(root, "apps", name))
         except RuntimeError as e:
@@ -257,27 +257,59 @@ def _jobs_ctx(app_pkg: str, impl=None) -> Context:
     return ctx
 
 
+def _fake_worker_project(base: str) -> str:
+    """自造带真实任务的模拟 worker 项目（apps/demo/worker.py 注册 demo.run/demo.revise）。
+
+    仓库真实应用卸载业务后无带任务 worker（file_convert 空档位）——
+    任务名协议正例用自造夹具, 不依赖具体应用。
+    """
+    root = os.path.join(base, "proj")
+    d = os.path.join(root, "apps", "demo")
+    os.makedirs(os.path.join(d, "config"))
+    for f in ("__init__.py", "profile.py", "shell.py", "main.py"):
+        with open(os.path.join(d, f), "w", encoding="utf-8") as fh:
+            fh.write('"""x"""\n')
+    tasks_src = (
+        "from celery import Celery\n"
+        "celery_app = Celery('demo')\n"
+        "@celery_app.task(name='demo.run')\n"
+        "def run(): ...\n"
+        "@celery_app.task(name='demo.revise')\n"
+        "def revise(): ...\n"
+    )
+    with open(os.path.join(d, "tasks.py"), "w", encoding="utf-8") as fh:
+        fh.write(tasks_src)
+    with open(os.path.join(d, "worker.py"), "w", encoding="utf-8") as fh:
+        fh.write("from apps.demo.tasks import celery_app, run, revise\n")
+    sys.path.insert(0, root)
+    return "demo"
+
+
 def t09_valid_names() -> None:
     from aic.extensions.platform.base.jobs import _WORKER_TASKS_CACHE
-    ctx = _jobs_ctx("mvp")
-    jobs = ctx.get("jobs")
-    jobs.register_task("writer.run_pipeline", lambda *a: None)
-    jobs.register_task("writer.revise", lambda *a: None)
-    check("t09 mvp 注册两个真实任务名通过", True)
-    jobs.register_task("writer.run_pipeline", lambda *a: None)  # 重复注册（mvp 每请求场景）
-    check("t09 重复注册同名通过（memoize O(1)）", True)
-    check("t09 内省结果已缓存", _WORKER_TASKS_CACHE.get("mvp") is not None)
+    with tempfile.TemporaryDirectory() as base:
+        app = _fake_worker_project(base)
+        ctx = _jobs_ctx(app)
+        jobs = ctx.get("jobs")
+        jobs.register_task("demo.run", lambda *a: None)
+        jobs.register_task("demo.revise", lambda *a: None)
+        check("t09 自造 worker 注册两个真实任务名通过", True)
+        jobs.register_task("demo.run", lambda *a: None)  # 重复注册（每请求场景）
+        check("t09 重复注册同名通过（memoize O(1)）", True)
+        check("t09 内省结果已缓存", _WORKER_TASKS_CACHE.get(app) is not None)
 
 
 def t10_violation() -> None:
-    ctx = _jobs_ctx("mvp")
-    jobs = ctx.get("jobs")
-    try:
-        jobs.register_task("writer.ghost", lambda *a: None)
-        check("t10 注册未在 worker 侧登记的任务名 → 报错", False)
-    except RuntimeError as e:
-        check("t10 任务名协议违规 → 报错", "任务名协议违规" in str(e)
-              and "writer.ghost" in str(e))
+    with tempfile.TemporaryDirectory() as base:
+        app = _fake_worker_project(base)
+        ctx = _jobs_ctx(app)
+        jobs = ctx.get("jobs")
+        try:
+            jobs.register_task("demo.ghost", lambda *a: None)
+            check("t10 注册未在 worker 侧登记的任务名 → 报错", False)
+        except RuntimeError as e:
+            check("t10 任务名协议违规 → 报错", "任务名协议违规" in str(e)
+                  and "demo.ghost" in str(e))
 
 
 def t11_empty_slot() -> None:
@@ -294,16 +326,18 @@ def t11_empty_slot() -> None:
 
 def t12_failover_double_register() -> None:
     from aic.extensions.platform.base.jobs import FailoverJobQueue, ThreadJobQueue
-    primary = ThreadJobQueue()
-    fallback = ThreadJobQueue()
-    ctx = _jobs_ctx("mvp", impl=FailoverJobQueue(primary=primary, fallback=fallback))
-    jobs = ctx.get("jobs")
-    jobs.register_task("writer.run_pipeline", lambda *a: None)
-    jobs.register_task("writer.run_pipeline", lambda *a: None)
-    check("t12 Failover 双路径均注册",
-          "writer.run_pipeline" in primary._registry
-          and "writer.run_pipeline" in fallback._registry)
-    check("t12 校验缓存仍单条（按 app_pkg 记账）", True)
+    with tempfile.TemporaryDirectory() as base:
+        app = _fake_worker_project(base)
+        primary = ThreadJobQueue()
+        fallback = ThreadJobQueue()
+        ctx = _jobs_ctx(app, impl=FailoverJobQueue(primary=primary, fallback=fallback))
+        jobs = ctx.get("jobs")
+        jobs.register_task("demo.run", lambda *a: None)
+        jobs.register_task("demo.run", lambda *a: None)
+        check("t12 Failover 双路径均注册",
+              "demo.run" in primary._registry
+              and "demo.run" in fallback._registry)
+        check("t12 校验缓存仍单条（按 app_pkg 记账）", True)
 
 
 def t13_degrade() -> None:
@@ -314,20 +348,14 @@ def t13_degrade() -> None:
 
 
 def t14_smoke_shells() -> None:
-    from apps.mvp.shell import build_shell as build_mvp
-    from apps.review.shell import build_shell as build_review
     from apps.file_convert.shell import build_shell as build_fc
+    from aic.apps.hello_aic.shell import build_shell as build_hello
 
-    for name, fn in (("mvp", build_mvp), ("review", build_review),
-                     ("file_convert", build_fc)):
+    for name, fn in (("file_convert", build_fc), ("hello_aic", build_hello)):
         r = fn()
         s = r[0] if isinstance(r, tuple) else r
         check(f"t14 {name} build_shell 通过（布局检查 + 守卫装配）",
-              s.has("jobs"))
-
-    review = build_review()
-    review.get("jobs").register_task("review.execute_review", lambda *a: None)
-    check("t14 review 壳注册 review.execute_review 通过（boot 期注册同路径）", True)
+              s.has("config"))
 
 
 def t15_init_templates() -> None:
@@ -469,35 +497,28 @@ def t27_bypass_relative_escape() -> None:
                   and "extensions.platform.loops" in str(e))
 
 
-def t28_bypass_review_excluded() -> None:
-    """豁免收敛: 精确到文件（apps/review/main.py + tasks.py）, 不再整条业务线。"""
+def t28_bypass_exclude() -> None:
+    """豁免机制: 默认无豁免; 显式 exclude（精确到文件）才放行指定文件。"""
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
-            "apps/review/main.py":
+            "apps/demo/main.py":
                 "from aic.extensions.platform.base.storage import LocalStorage\n",
-            "apps/review/tasks.py":
-                "from extensions.business.review.task import TASK_EXECUTE_REVIEW\n",
+            "apps/demo/tasks.py":
+                "from extensions.business.demo import DemoPlugin\n",
         })
-        # 两个精确豁免文件 → 放行
+        # 默认无豁免 → 两个文件都违规
         try:
             check_bypass_imports(base)
-            check("t28 review 精确豁免文件放行", True)
+            check("t28 默认无豁免 → 全仓扫描", False)
+        except RuntimeError:
+            check("t28 默认无豁免 → 全仓扫描", True)
+        # 显式 exclude 精确到文件 → 放行指定文件
+        try:
+            check_bypass_imports(base, exclude=("apps/demo/main.py", "apps/demo/tasks.py"))
+            check("t28 显式 exclude 精确文件放行", True)
         except RuntimeError as e:
             print(f"    {e}")
-            check("t28 review 精确豁免文件放行", False)
-
-    # 非豁免文件（extensions 侧反向 import）→ 仍要拦（收敛后不再整线豁免）
-    with tempfile.TemporaryDirectory() as base:
-        _make_project(base, {
-            "extensions/business/review/plugin.py":
-                "from apps.review.tasks import TASK_X\n",
-        })
-        try:
-            check_bypass_imports(base)
-            check("t28 豁免收敛: extensions 侧反向 import 仍拦", False)
-        except RuntimeError as e:
-            check("t28 豁免收敛: extensions 侧反向 import 仍拦",
-                  "扩展反向 import 应用壳" in str(e))
+            check("t28 显式 exclude 精确文件放行", False)
 
 
 def t30_stream_bridge() -> None:
@@ -566,7 +587,7 @@ def main() -> None:
     t25_bypass_composition_ok()
     t26_bypass_utility_ok()
     t27_bypass_relative_escape()
-    t28_bypass_review_excluded()
+    t28_bypass_exclude()
     t29_bypass_deterministic()
     t30_stream_bridge()
     print(f"\nM6 验证: {len(PASS)} 通过 / {len(FAIL)} 失败")

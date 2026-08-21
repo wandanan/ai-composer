@@ -4,19 +4,18 @@
 
 验证项:
   graph 数据层（真实项目）:
-   1. build_graph: 3 应用 / 关键插件 / keys（AnnAssign 支持）/ 边
-   2. public 标记: ExtractPlugin/DbPlugin/StandardPlugin=True, ReviewPlugin=False
-   3. ai 判定: ReviewPlugin/WriterPlugin=True, FileConvertPlugin=False
-   4. 孤儿: DemoPlugin/EchoPlugin/HelloPlugin/HermesEnginePlugin/OpenAIEnginePlugin; 动态: mvp ConfigPlugin（worker 条件覆盖）
-   5. 函数包装展开: review 挂载 CachePlugin（_cache_plugin）
+   1. build_graph: 1 应用 / 关键插件 / keys（AnnAssign 支持）/ 边
+   2. public 标记: ExtractPlugin/DbPlugin/StandardPlugin/TasksPlugin=True, FileConvertPlugin=False
+   3. ai 判定: OpenAIEnginePlugin/HermesEnginePlugin=True, FileConvertPlugin=False
+   4. 孤儿: 公共未挂载 + 演示 + 双引擎适配器; 动态: 无
+   5. 挂载边: file_convert 含业务 + 平台基础
   uninstall 影响分析（纯计算, 不删）:
-   6. 卸载 review: 专属=[ReviewPlugin], DbPlugin/ExtractPlugin/StandardPlugin 保留,
-      删除清单仅 2 项（壳 + review 包）
-   7. 同包保护: DbPlugin 与共享插件同包 → 降级保留
+   6. 卸载 file_convert: 专属=[FileConvertPlugin], 公共插件保留, 删除仅 2 项
+   7. 删除清单不含框架公共插件
    8. 卸载 file_convert: 专属=[FileConvertPlugin]
-   9. 插件卸载: StandardPlugin 拒绝（挂载 review）; DemoPlugin 允许（同包闭包）
+   9. 插件卸载: StandardPlugin 孤儿允许; DemoPlugin 允许（同包闭包）
   promote 分析:
-  10. 预演: ReviewPlugin 移动/引用更新清单正确
+  10. 预演: DemoPlugin 移动/引用更新清单正确
   11. 框架插件拒绝: ExtractPlugin（aic 内, 只读）→ SystemExit
   12. 地基拒绝: --to apps → SystemExit
   13. 引用替换边界: 前缀 + .plugin 段保留; todo2 不误伤
@@ -58,26 +57,27 @@ def _base_of(path: str) -> str:
 
 def t01_graph_data() -> None:
     g = build_graph()
-    check("t01 应用 3 个（用户空间; hello_aic 在 aic 框架内）",
-          len(g["apps"]) == 3
-          and set(g["apps"]) == {"mvp", "review", "file_convert"})
+    check("t01 应用 1 个（用户空间; hello_aic 在 aic 框架内）",
+          len(g["apps"]) == 1
+          and set(g["apps"]) == {"file_convert"})
     check("t01 插件 ≥ 18", len(g["plugins"]) >= 18)
     check("t01 keys 含 converter（AnnAssign 支持）",
           "converter" in g["keys"])
-    check("t01 边 ≥ 77", len(g["edges"]) >= 77)
+    check("t01 边 ≥ 30", len(g["edges"]) >= 30)
 
 
 def t02_public_markers() -> None:
     g = build_graph()
-    for cls in ("ExtractPlugin", "DbPlugin", "StandardPlugin"):
+    for cls in ("ExtractPlugin", "DbPlugin", "StandardPlugin", "TasksPlugin"):
         check(f"t02 {cls} public=True", g["plugins"][cls].get("public") is True)
-    check("t02 ReviewPlugin public=False", g["plugins"]["ReviewPlugin"].get("public") is False)
+    check("t02 FileConvertPlugin public=False", g["plugins"]["FileConvertPlugin"].get("public") is False)
 
 
 def t03_ai_detection() -> None:
     g = build_graph()
-    check("t03 ReviewPlugin ai（inject agentLoop）", g["plugins"]["ReviewPlugin"]["ai"])
-    check("t03 WriterPlugin ai（包内 WriterTask）", g["plugins"]["WriterPlugin"]["ai"])
+    check("t03 引擎插件非 ai（provides agentLoop, 非消费）",
+          not g["plugins"]["OpenAIEnginePlugin"]["ai"]
+          and not g["plugins"]["HermesEnginePlugin"]["ai"])
     check("t03 FileConvertPlugin 非 ai", not g["plugins"]["FileConvertPlugin"]["ai"])
 
 
@@ -85,39 +85,38 @@ def t04_orphan_dynamic() -> None:
     g = build_graph()
     orphans = sorted(n for n, i in g["plugins"].items()
                      if not i["apps"] and not i["dynamic"])
-    check("t04 孤儿 = 演示 + 双引擎适配器",
-          orphans == ["DemoPlugin", "EchoPlugin", "HelloPlugin",
-                      "HermesEnginePlugin", "OpenAIEnginePlugin"])
+    check("t04 孤儿 = 公共未挂载 + 演示 + 双引擎适配器",
+          orphans == ["DbPlugin", "DemoPlugin", "EchoPlugin", "ExtractPlugin",
+                      "HelloPlugin", "HermesEnginePlugin", "OpenAIEnginePlugin",
+                      "StandardPlugin", "TasksPlugin"])
     dyn = sorted(n for n, i in g["plugins"].items() if i["dynamic"])
-    check("t04 动态 = mvp ConfigPlugin（worker 路径条件覆盖, graph 扫描面可见）",
-          dyn == ["ConfigPlugin"])
+    check("t04 动态 = 无（壳零条件组合）", dyn == [])
 
 
-def t05_factory_expansion() -> None:
+def t05_mount_edges() -> None:
     g = build_graph()
-    review_mounts = [e["to"] for e in g["edges"]
-                     if e["kind"] == "mount" and e["from"] == "review"]
-    check("t05 _cache_plugin 展开为 CachePlugin", "CachePlugin" in review_mounts)
+    fc_mounts = [e["to"] for e in g["edges"]
+                 if e["kind"] == "mount" and e["from"] == "file_convert"]
+    check("t05 file_convert 挂载含业务插件", "FileConvertPlugin" in fc_mounts)
+    check("t05 file_convert 挂载含平台基础", "ConfigPlugin" in fc_mounts)
 
 
 # ── uninstall 影响分析（纯计算）────────────────────
 
-def t06_review_uninstall() -> None:
+def t06_fc_uninstall() -> None:
     g = build_graph()
-    r = analyze_app_removal(_ROOT, g, "review")
-    check("t06 专属仅 ReviewPlugin", r["exclusive_plugins"] == ["ReviewPlugin"])
-    for kept in ("DbPlugin", "ExtractPlugin", "StandardPlugin"):
+    r = analyze_app_removal(_ROOT, g, "file_convert")
+    check("t06 专属仅 FileConvertPlugin", r["exclusive_plugins"] == ["FileConvertPlugin"])
+    for kept in ("ConfigPlugin", "StoragePlugin", "JobsPlugin"):
         check(f"t06 公共插件 {kept} 保留", kept in r["shared_plugins"])
-    check("t06 删除仅 2 项（壳 + review 包）", len(r["delete"]) == 2
-          and all(_base_of(d) in ("review",) for d in r["delete"]))
+    check("t06 删除仅 2 项（壳 + file_convert 包）", len(r["delete"]) == 2
+          and all(_base_of(d) in ("file_convert",) for d in r["delete"]))
 
 
-def t07_same_pkg_protection() -> None:
+def t07_no_platform_in_delete() -> None:
     g = build_graph()
-    r = analyze_app_removal(_ROOT, g, "review")
-    # DbPlugin 与 StoragePlugin 等共享插件同在 base 包 → 整包不可删 → 降级保留
-    check("t07 DbPlugin 降级保留（同包保护）", "DbPlugin" in r["shared_plugins"])
-    check("t07 删除清单不含 platform/base", all("base" not in d for d in r["delete"]))
+    r = analyze_app_removal(_ROOT, g, "file_convert")
+    check("t07 删除清单不含框架公共插件", all("platform" not in d for d in r["delete"]))
 
 
 def t08_app_uninstall() -> None:
@@ -130,8 +129,7 @@ def t08_app_uninstall() -> None:
 def t09_plugin_removal() -> None:
     g = build_graph()
     blocked = analyze_plugin_removal(_ROOT, g, "StandardPlugin")
-    check("t09 StandardPlugin 拒绝（挂载 review）", blocked["blocked"] != []
-          and "review" in str(blocked["blocked"]))
+    check("t09 StandardPlugin 孤儿（无挂载）→ 允许", blocked["blocked"] == [])
     allowed = analyze_plugin_removal(_ROOT, g, "DemoPlugin")
     check("t09 DemoPlugin 允许（同包孤儿闭包）", allowed["blocked"] == []
           and allowed["candidates"] == ["DemoPlugin", "EchoPlugin"])
@@ -141,10 +139,12 @@ def t09_plugin_removal() -> None:
 
 def t10_promote_dry_run() -> None:
     g = build_graph()
-    rep = promote(_ROOT, g, "ReviewPlugin", "platform", dry=True)
+    rep = promote(_ROOT, g, "FileConvertPlugin", "platform", dry=True)
     check("t10 非幂等分支", not rep["already"])
-    check("t10 移动源在 business/review", "business" in rep["move"][0] and "review" in rep["move"][0])
-    check("t10 目标在 platform/review", "platform" in rep["move"][1] and "review" in rep["move"][1])
+    check("t10 移动源在 business/file_convert",
+          "business" in rep["move"][0] and "file_convert" in rep["move"][0])
+    check("t10 目标在 platform/file_convert",
+          "platform" in rep["move"][1] and "file_convert" in rep["move"][1])
     check("t10 引用更新含 profile", any("profile" in os.path.basename(p) for p in rep["refs"]))
     check("t10 引用更新 > 0", len(rep["refs"]) > 0)
 
@@ -268,10 +268,10 @@ def t16_template_dry_run() -> None:
     from aic.tools.template import build_template
     g = build_graph()
     rep = build_template(_ROOT, g, os.path.join(_ROOT, "tmp-tpl"), dry=True,
-                         src_app="review")
+                         src_app="file_convert")
     check("t16 公共插件三件套进清单", {"DbPlugin", "ExtractPlugin", "StandardPlugin"}
           <= set(rep["publics"]))
-    check("t16 未上浮共享提示", "ConfigPlugin" in rep["unmarked_shared"])
+    check("t16 无未上浮共享（单应用挂载）", rep["unmarked_shared"] == [])
 
 
 def t17_template_extract() -> None:
@@ -339,7 +339,7 @@ def t19_caps_real_repo() -> None:
     check("t19 声明工具白名单", "extensions.platform.session.artifacts" in out)
     check("t19 事件协议段（引擎预登记）", "== 事件协议" in out and "llm/stream" in out)
     check("t19 引擎选择", "FailoverLoop" in out and "OpenAILoop" in out)
-    check("t19 业务插件（WriterPlugin）", "WriterPlugin" in out)
+    check("t19 业务插件（FileConvertPlugin）", "FileConvertPlugin" in out)
 
 
 def t20_caps_broken_module() -> None:
@@ -479,9 +479,9 @@ def main() -> None:
     t02_public_markers()
     t03_ai_detection()
     t04_orphan_dynamic()
-    t05_factory_expansion()
-    t06_review_uninstall()
-    t07_same_pkg_protection()
+    t05_mount_edges()
+    t06_fc_uninstall()
+    t07_no_platform_in_delete()
     t08_app_uninstall()
     t09_plugin_removal()
     t10_promote_dry_run()

@@ -61,11 +61,14 @@ def analyze_app_removal(root: str, graph: dict, app: str) -> dict:
                      if e["kind"] == "mount" and e["from"] == app})
     # 专属 = 只挂载该应用、非动态、且非公共（PUBLIC 标记的上浮插件有独立生命周期,
     # 不随应用卸载删除——如 ExtractPlugin 已上浮 platform 但只被 review 挂载）
+    # 且非框架插件（module 以 aic. 开头的框架包是只读地基, 永不随应用卸载删除——
+    # 若某平台插件只剩该应用挂载, 它仍应保留, 而不是连带删掉框架包）
     exclusive = [
         cls for cls in mounts
         if graph["plugins"][cls]["apps"] == [app]
         and not graph["plugins"][cls]["dynamic"]
-        and not graph["plugins"][cls].get("public")]
+        and not graph["plugins"][cls].get("public")
+        and not graph["plugins"][cls]["module"].startswith("aic.")]
     # 同包保护: 删除粒度是整包——专属插件的包内若混有共享/公共插件,
     # 整包不可删（会误删同包的他插件, 如 DbPlugin 与 StoragePlugin 同在 base 包）
     # → 降级为保留
@@ -82,6 +85,8 @@ def analyze_app_removal(root: str, graph: dict, app: str) -> dict:
 
     delete = [os.path.join(root, "apps", app)] + [
         _pkg_dir(root, graph["plugins"][cls]["module"]) for cls in exclusive]
+    # 防御: 删除清单绝不含框架地基（aic/）——分析层已排除, 这里兜底
+    delete = [d for d in delete if not d.startswith(os.path.join(root, "aic"))]
     return {
         "app": app,
         "delete": sorted(set(delete)),

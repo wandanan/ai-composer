@@ -1,6 +1,6 @@
 """apps/hello_aic/shell.py — 装配（aic.tools.init 生成）。
 
-与 apps/mvp/shell.py 同构: 默认 FakeLoop + boot 插件组合（引擎插件挂载即覆盖）。
+与标准壳同构: 默认 FakeLoop + boot 插件组合（引擎插件挂载即覆盖）。
 """
 from __future__ import annotations
 

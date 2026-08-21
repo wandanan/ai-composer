@@ -2,7 +2,7 @@
 
 无任务注册时的状态:
 - celery_app 存在（任务名协议的内省目标: 本模块内 @celery_app.task 注册的任务名）
-- 不注册任何业务任务; 需要异步任务时按 apps/mvp/worker.py 补 @celery_app.task
+- 不注册任何业务任务; 需要异步任务时按标准壳补 @celery_app.task
 
 启动（需 Redis broker 可用）:
     python -m apps.hello_aic.worker

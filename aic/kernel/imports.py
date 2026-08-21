@@ -25,8 +25,8 @@
 - 跨扩展根包旁路（业务↔平台, 用户空间↔框架空间）→ 应走 ctx 服务或声明公共工具
 - 扩展反向 import 应用壳 → 依赖方向倒置
 
-边界（文档化）: review 业务线整体排除扫描（不进发布包）; extensions→tools
-不在检查范围（CLI 层附属, sandbox 补丁设计上反向; hermes 环境提供顶层 tools）。
+边界（文档化）: extensions→tools 不在检查范围（CLI 层附属, sandbox 补丁设计上反向;
+hermes 环境提供顶层 tools）。业务豁免默认无（精确到文件, 见 _DEFAULT_EXCLUDED）。
 
 违规 → 装配时报错（RuntimeError, [kernel] 前缀, 收集式, sorted 确定性）——
 与 M5 挂载校验 / 壳布局检查同款"大声失败"。
@@ -46,14 +46,10 @@ UTILITY_MODULES = (
     "aic.extensions.platform.security.sanitize",
 )
 
-# 项目级业务排除默认值（精确到文件, 非整条业务线）:
-#   apps/review/main.py — 壳端点直连 ORM 模型（ReviewFile/ReviewMessage）做 DB 查询,
-#     属遗留架构债（应下沉到 review 服务）, 待独立重构。
-#   apps/review/tasks.py — 任务名常量 re-export（单一来源在 review/task.py）,
-#     壳按任务名协议取常量（方向正确, 但检查器把常量 import 判为直连实现）。
-# 机制不依赖任何业务名: 可通过 check_bypass_imports(exclude=...) 或
-# 环境变量 KIT_EXCLUDED_DIRS（逗号分隔相对路径）覆盖
-_DEFAULT_EXCLUDED = ("apps/review/main.py", "apps/review/tasks.py")
+# 项目级业务排除默认值（默认无豁免——整仓按契约扫描）。
+# 业务插件若有遗留架构债需豁免: 精确到文件配置（非整条业务线）, 经
+# check_bypass_imports(exclude=...) 或环境变量 KIT_EXCLUDED_DIRS 覆盖。
+_DEFAULT_EXCLUDED: tuple[str, ...] = ()
 
 
 def _resolve_exclude(exclude: tuple[str, ...] | None) -> tuple[str, ...]:

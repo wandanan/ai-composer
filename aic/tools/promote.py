@@ -14,8 +14,8 @@ PUBLIC 标记写进哪里——**不实际执行**; 上浮是破坏性操作（�
     python -m aic.tools.promote MyPlugin --yes           # 真正上浮（默认到 platform 公共惯例位）
     python -m aic.tools.promote MyPlugin --to business   # 上浮到领域惯例位（共享领域插件）
     python -m aic.tools.promote MyPlugin --to my_plugins # 上浮到隐式插件区任意目录
-    例: python -m aic.tools.promote ReviewPlugin
-        # → 显示: 移动 extensions/business/review → extensions/platform/review;
+    例: python -m aic.tools.promote FileConvertPlugin
+        # → 显示: 移动 extensions/business/file_convert → extensions/platform/file_convert;
         #          更新 13 个文件的 import; 在 plugin.py 写 PUBLIC = True
 
 KIT_PROJECT_ROOT 可指定项目根（测试模拟项目用）。
@@ -247,7 +247,7 @@ def main(argv: list[str] | None = None) -> None:
         description="私有插件 → 公共插件（上浮命令）: 移动包到公共位 + 更新全项目"
                     " import 引用 + 写入 PUBLIC 标记（此后不随任何应用卸载删除）。"
                     " 默认只显示影响清单（预演）, 加 --yes 才真正执行。")
-    p.add_argument("plugin", help="插件类名（如 ReviewPlugin）")
+    p.add_argument("plugin", help="插件类名（如 FileConvertPlugin）")
     p.add_argument("--to", default="platform",
                    help="目标惯例位: platform（公共, 默认）/ business（共享领域）/ 任意相对路径")
     p.add_argument("--yes", action="store_true",
