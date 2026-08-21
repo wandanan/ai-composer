@@ -35,6 +35,15 @@ class StreamService:
         self._history: dict[str, list[dict]] = {}
         self._history_limit = history_limit
         self._lock = threading.Lock()
+        self._redis_client = None   # 惰性单连接（redis-py 客户端线程安全, 每 publish 新建会泄漏）
+
+    def _redis(self):
+        """惰性共享 Redis 客户端（首次用时建立; 连接失败按次降级, 不阻断内存通道）。"""
+        if self._redis_client is None:
+            import redis as redis_sync
+            self._redis_client = redis_sync.Redis.from_url(
+                self.redis_url, socket_connect_timeout=1)
+        return self._redis_client
 
     @property
     def redis_enabled(self) -> bool:
@@ -85,14 +94,11 @@ class StreamService:
             for q in list(self._subs.get(session_id, [])):
                 q.put(payload)
 
-        # 通道 2: Redis pub/sub（跨进程: Celery worker 路径）
+        # 通道 2: Redis pub/sub（跨进程: Celery worker 路径; 惰性单连接）
         if self.redis_url:
             try:
-                import redis as redis_sync
-                r = redis_sync.Redis.from_url(self.redis_url,
-                                              socket_connect_timeout=1)
-                r.publish(f"sse:{session_id}",
-                          json.dumps(payload, ensure_ascii=False))
+                self._redis().publish(f"sse:{session_id}",
+                                      json.dumps(payload, ensure_ascii=False))
             except Exception:
                 pass  # Redis 不可用时 in-process 兜底
 

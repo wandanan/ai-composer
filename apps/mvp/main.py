@@ -1,4 +1,4 @@
-"""mvp_app/main.py — 编写应用 MVP：FastAPI 可运行 + 全插件装配。
+"""apps/mvp/main.py — 编写应用 MVP：FastAPI 可运行 + 全插件装配。
 
 运行:
     PYTHONIOENCODING=utf-8 python -m uvicorn apps.mvp.main:app --port 8007

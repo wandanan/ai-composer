@@ -26,6 +26,7 @@ def extract_document(content: bytes, filename: str, use_ocr: bool = False,
 
     大声失败原则: 不支持的类型/缺依赖/转换失败 → 抛异常（调用方自行 catch）;
     仅"文档本身为空"返回 ""。不要把"提取失败"和"内容为空"混为一谈。
+    use_ocr: 仅 MinerU 引擎有语义（parse_method=ocr 而非 txt）; local 引擎忽略。
     """
     if progress_callback:
         try:
@@ -44,18 +45,19 @@ def extract_document(content: bytes, filename: str, use_ocr: bool = False,
                 return _extract_docx(content)
             raise RuntimeError(f"[extract] .doc 转 PDF 失败: {e}") from e
         if engine == "mineru":
-            return _extract_mineru(pdf, filename, progress_callback)
+            return _extract_mineru(pdf, filename, use_ocr, progress_callback)
         return _extract_pdf(pdf)
     if ext == ".pdf":
         if engine == "mineru":
-            return _extract_mineru(content, filename, progress_callback)
+            return _extract_mineru(content, filename, use_ocr, progress_callback)
         return _extract_pdf(content)
     if ext in (".txt", ".md"):
         return content.decode("utf-8", errors="replace")
     raise ValueError(f"[extract] 不支持的文件类型: {ext} ({filename})")
 
 
-def _extract_mineru(content: bytes, filename: str, progress_callback=None) -> str:
+def _extract_mineru(content: bytes, filename: str, use_ocr: bool = False,
+                    progress_callback=None) -> str:
     """MinerU 引擎（批量提交+轮询+MD5 缓存, 对齐原项目 mineru_extract）。"""
     import os
 
@@ -65,7 +67,7 @@ def _extract_mineru(content: bytes, filename: str, progress_callback=None) -> st
         base_url=os.environ.get("MINERU_API_URL", "http://127.0.0.1:8000"),
         api_key=os.environ.get("MINERU_API_KEY", ""),
         cache_enabled=os.environ.get("MINERU_CACHE_ENABLED", "1") == "1")
-    return client.extract(content, filename, progress_callback)
+    return client.extract(content, filename, progress_callback, use_ocr=use_ocr)
 
 
 def _extract_docx(content: bytes) -> str:

@@ -9,7 +9,7 @@ import os
 
 from aic.kernel import Context, Plugin
 
-from .tool import StandardSearchTool
+from .tool import StandardSearchTool, register_standard_tool
 
 
 class StandardPlugin(Plugin):
@@ -23,11 +23,14 @@ class StandardPlugin(Plugin):
         self._timeout = timeout
 
     def apply(self, ctx: Context):
-        # hermes registry 由 import standard.tool 时模块级 _register() 触发（工具名 standard_search）
+        # 同一实例两边登记: ctx 服务 + hermes 工具表（可逆, unmount 注销）
         tool = StandardSearchTool(
             self._search_url or os.environ.get("STANDARD_SEARCH_URL", ""),
             timeout=self._timeout)
         ctx.register("standardSearch", tool)
+        dispose = register_standard_tool(tool)
+        if dispose is not None:
+            ctx.effect(dispose)
 
 
 __all__ = ["StandardPlugin"]

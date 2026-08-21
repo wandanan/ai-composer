@@ -10,6 +10,7 @@ import logging
 import os
 from contextvars import ContextVar
 from datetime import datetime
+from typing import Callable
 
 from extensions.business.review.report import ReportGuard
 
@@ -103,22 +104,25 @@ class SaveReviewReportTool:
         }, ensure_ascii=False)
 
 
-def _register() -> None:
-    """注册进 hermes 工具系统（模块加载时由 tools/__init__ import 触发）。"""
+def register_review_report_tool(tool: "SaveReviewReportTool") -> "Callable[[], None] | None":
+    """把给定实例注册进 hermes 工具系统, 返回注销 disposer（非 hermes 环境返回 None）。
+
+    生命周期归 ReviewPlugin apply（mount 注册 / unmount 注销）——不在模块级
+    自注册: import 无副作用（旧实现在 import 时写 hermes 全局注册表,
+    绕过内核效果桶, unmount 残留）。
+    """
     try:
         from tools.registry import registry
-        tool = SaveReviewReportTool()
-        registry.register(
-            name=tool.name,
-            toolset=tool.toolset,
-            schema=tool.schema,
-            handler=tool.handle,
-            check_fn=None,
-            description="保存审查报告并自动上传到云端",
-            emoji="📋",
-        )
     except ImportError:
         logger.debug("[review] tools.registry 未安装（非 hermes 环境），跳过 save_review_report 注册")
-
-
-_register()
+        return None
+    registry.register(
+        name=tool.name,
+        toolset=tool.toolset,
+        schema=tool.schema,
+        handler=tool.handle,
+        check_fn=None,
+        description="保存审查报告并自动上传到云端",
+        emoji="📋",
+    )
+    return lambda: registry.deregister(tool.name)

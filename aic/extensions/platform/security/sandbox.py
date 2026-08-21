@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from aic.kernel import Context, Plugin
+from aic.extensions.platform.security.sanitize import sanitize_filename  # noqa: F401 — 向后兼容 re-export
 
 logger = logging.getLogger(__name__)
 
@@ -78,23 +79,6 @@ def unlock_dir(path: str) -> None:
         os.chmod(path, mode | stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH)
     except Exception as e:
         logger.warning(f"[sandbox] 解锁写入失败 {path}: {e}")
-
-
-def sanitize_filename(filename: str, max_length: int = 200) -> str:
-    """净化文件名, 防路径遍历和非法字符。"""
-    filename = filename.replace("\x00", "")
-    filename = filename.replace("/", "_").replace("\\", "_")
-    filename = re.sub(r'[<>"|?*]', "_", filename)
-    filename = filename.strip().strip(".")
-    if len(filename) > max_length:
-        name, _, ext = filename.rpartition(".")
-        if ext and len(ext) <= 10:
-            filename = name[: max_length - len(ext) - 1] + "." + ext
-        else:
-            filename = filename[:max_length]
-    if not filename:
-        filename = "unnamed"
-    return filename
 
 
 class SandboxService:

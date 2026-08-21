@@ -21,6 +21,26 @@ _MAX_RETRIES = 3
 _RETRY_DELAY = 2.0
 
 
+def _elapsed_seconds(started_at) -> float:
+    """从 started_at 算已耗时（服务端可能回 ISO8601 字符串或 Unix 时间戳）。
+
+    None → 0; 数字 → time.time()-值（负数夹到 0）; 字符串 → 按 ISO 解析。
+    """
+    if not started_at:
+        return 0.0
+    if isinstance(started_at, (int, float)):
+        return max(0.0, time.time() - started_at)
+    try:
+        from datetime import datetime
+        if isinstance(started_at, str):
+            s = started_at.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(s)
+            return max(0.0, time.time() - parsed.timestamp())
+    except (ValueError, TypeError):
+        pass
+    return 0.0
+
+
 class MinerUClient:
     """MinerU 客户端: submit → poll → get_result。"""
 
@@ -37,9 +57,10 @@ class MinerUClient:
 
     # ── 提交 ──
 
-    def submit_task(self, pdf_bytes: bytes, filename: str) -> str:
+    def submit_task(self, pdf_bytes: bytes, filename: str, use_ocr: bool = False) -> str:
         """提交解析任务, 返回 task_id。multipart 表单对齐原项目。"""
         boundary = "----kit-form-" + hashlib.md5(os.urandom(16)).hexdigest()
+        parse_method = "ocr" if use_ocr else "txt"
         form = [
             b"--" + boundary.encode(),
             b'Content-Disposition: form-data; name="return_md"\r\n\r\ntrue',
@@ -48,7 +69,8 @@ class MinerUClient:
             b"--" + boundary.encode(),
             b'Content-Disposition: form-data; name="formula_enable"\r\n\r\ntrue',
             b"--" + boundary.encode(),
-            b'Content-Disposition: form-data; name="parse_method"\r\n\r\nocr',
+            b'Content-Disposition: form-data; name="parse_method"\r\n\r\n'
+            + parse_method.encode(),
             b"--" + boundary.encode(),
             b'Content-Disposition: form-data; name="effort"\r\n\r\nmedium',
             b"--" + boundary.encode(),
@@ -61,7 +83,9 @@ class MinerUClient:
             pdf_bytes,
             b"\r\n--" + boundary.encode() + b"--\r\n",
         ]
-        body = b"\r\n".join(form)
+        # 关键: join 用 \r\n 会在 file 头（已以 \r\n\r\n 结尾）与 pdf_bytes 之间
+        # 多插一个 \r\n → 线上文件内容 = "\r\n"+bytes+"\r\n"。用空串拼接保持字节原样。
+        body = b"".join(form)
         headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -118,8 +142,8 @@ class MinerUClient:
     # ── 主入口（带 MD5 缓存 + 进度估算）──
 
     def extract(self, pdf_bytes: bytes, filename: str,
-                progress_callback=None) -> str:
-        """解析 PDF 为 Markdown（MD5 缓存命中直接读）。"""
+                progress_callback=None, use_ocr: bool = False) -> str:
+        """解析 PDF 为 Markdown（MD5 缓存命中直接读; use_ocr 决定 parse_method）。"""
         digest = hashlib.md5(pdf_bytes).hexdigest()
         if self.cache_enabled:
             cache_path = os.path.join(self._cache_dir, f"{digest}.md")
@@ -127,7 +151,7 @@ class MinerUClient:
                 with open(cache_path, encoding="utf-8") as f:
                     return f.read()
 
-        task_id = self.submit_task(pdf_bytes, filename)
+        task_id = self.submit_task(pdf_bytes, filename, use_ocr)
         deadline = time.time() + self.timeout
         while time.time() < deadline:
             st = self.poll_status(task_id)
@@ -143,7 +167,7 @@ class MinerUClient:
                 raise RuntimeError(f"MinerU 解析失败: {status}")
             # 进度估算: 10 ~ 85%
             if progress_callback:
-                elapsed = st.get("started_at") and time.time() - st["started_at"] or 0
+                elapsed = _elapsed_seconds(st.get("started_at"))
                 pct = 10 + min(elapsed / _ESTIMATED_PARSE_SECONDS, 1) * 75
                 try:
                     progress_callback({"stage": "parse", "progress": round(pct)})

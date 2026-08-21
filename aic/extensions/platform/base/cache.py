@@ -79,14 +79,21 @@ class RedisCache:
                                        socket_connect_timeout=1)
 
     def set(self, key: str, value: str, ttl: float | None = None) -> None:
-        self._r.set(key, value, ex=int(ttl) if ttl else None)
+        self._r.set(key, value, px=self._ttl_px(ttl))
 
     def get(self, key: str) -> str | None:
         v = self._r.get(key)
         return v.decode("utf-8") if v else None
 
     def set_nx(self, key: str, value: str, ttl: float | None = None) -> bool:
-        return bool(self._r.set(key, value, ex=int(ttl) if ttl else None, nx=True))
+        return bool(self._r.set(key, value, px=self._ttl_px(ttl), nx=True))
+
+    @staticmethod
+    def _ttl_px(ttl: float | None) -> int | None:
+        """秒→毫秒, 保亚秒精度（ex=int(ttl) 会把 0<ttl<1 截成 0 → Redis 报错）。"""
+        if ttl is None:
+            return None
+        return max(1, int(ttl * 1000))
 
     def delete(self, key: str) -> None:
         self._r.delete(key)

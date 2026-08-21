@@ -19,13 +19,12 @@ from __future__ import annotations
 import importlib
 import inspect
 import os
+import re
 import sys
 from typing import Any
 
 from aic.kernel import Plugin
 from aic.kernel.imports import UTILITY_MODULES
-
-_SECTIONS = ("platform", "business")
 
 
 def _aic_platform_dir() -> str:
@@ -70,13 +69,14 @@ def _collect_plugins(mod) -> list[dict]:
     for cls_name, cls in sorted(vars(mod).items()):
         if not isinstance(cls, type) or cls is Plugin or not issubclass(cls, Plugin):
             continue
-        try:
-            sig = str(inspect.signature(cls.__init__))[1:-1]
-            core = sig[5:] if sig.startswith("self, ") else sig
-            if core in ("/", "*args, **kwargs", ""):
+        sig = ""
+        if cls.__init__ is not object.__init__:   # 未自定义构造 → 无换法
+            try:
+                # 剥掉首个 self（含 `self, /` 位置参数形态）, 只显示用户可传构造参数
+                sig = re.sub(r"^self,\s*", "",
+                             str(inspect.signature(cls.__init__))[1:-1])
+            except (TypeError, ValueError):
                 sig = ""
-        except (TypeError, ValueError):
-            sig = ""
         out.append({
             "cls": cls_name,
             "provides": list(getattr(cls, "provides", []) or []),
@@ -159,7 +159,13 @@ def caps(root: str | None = None) -> int:
                 for key in (info["provides"] or [info["cls"]]):
                     platform_rows.append((key, info["cls"], info["sig"], info["doc"]))
             if ".platform.loops" in module_name:
-                engines = _collect_engines(mod)
+                engines.extend(_collect_engines(mod))
+                # hermes 引擎适配器（pyproject 排除不进发布包; 仓库模式存在则一并列出）
+                try:
+                    import aic.extensions.platform.loops.hermes as _hermes
+                    engines.extend(_collect_engines(_hermes))
+                except ImportError:
+                    pass
         else:
             for info in plugins:
                 business_rows.append((info["cls"], info["provides"], info["doc"]))

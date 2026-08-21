@@ -674,7 +674,7 @@ function buildTree() {
   if (dyn.length) {
     html += `<details><summary>⚡ 动态装配 (${dyn.length})</summary>`;
     for (const cls of dyn.sort()) {
-      html += `<div class="t-node t-plugin" data-plugin="${cls}">${cls}（KIT_ENGINE 等条件）</div>`;
+      html += `<div class="t-node t-plugin" data-plugin="${cls}">${cls}（shell 条件组合）</div>`;
     }
     html += "</details>";
   }

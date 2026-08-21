@@ -2,13 +2,11 @@
 
 业务即插件: 审查 = review 插件, 挂到平台即构成审查应用。
 inject: 平台能力（存储/队列/SSE/缓存/沙箱/引擎/会话）
-provides: tasks(任务) / review(核心服务) / reviewPipeline(流程) / knowledge(知识) / tools(定制工具)
+provides: review(核心服务) / reviewPipeline(流程) / knowledge(知识) / tools(定制工具)
 """
 from __future__ import annotations
 
 from aic.kernel import Context, Plugin, ServiceNotFound
-
-import extensions.business.review.tools  # noqa: F401  — 触发 hermes 工具注册
 
 
 class ReviewPlugin(Plugin):
@@ -24,7 +22,10 @@ class ReviewPlugin(Plugin):
         from extensions.business.review.pipeline import ReviewPipeline
         from extensions.business.review.service import ReviewService
         from extensions.business.review.task import ReviewTask
-        from extensions.business.review.tools.save_review_report import SaveReviewReportTool
+        from extensions.business.review.tools.save_review_report import (
+            SaveReviewReportTool,
+            register_review_report_tool,
+        )
 
         ctx.get("db").create_all(ReviewBase)   # 审查表结构（引擎平台提供）
 
@@ -37,9 +38,14 @@ class ReviewPlugin(Plugin):
         ctx.register("review", ReviewService(ctx))
         ctx.register("reviewPipeline", ReviewPipeline(ctx))
         ctx.register("knowledge", ReviewKnowledgeProvider())
+        # 同一实例两边登记: ctx 服务 + hermes 工具表（可逆, unmount 注销）
+        report_tool = SaveReviewReportTool()
         ctx.register("tools", {
-            "save_review_report": SaveReviewReportTool(),
+            "save_review_report": report_tool,
         })
+        dispose = register_review_report_tool(report_tool)
+        if dispose is not None:
+            ctx.effect(dispose)
 
         # 事件契约（0.2.1 事件注册表）: 审查阶段事件声明 + SSE 桥接
         # （pipeline.py 广播 pipeline/phase; StreamPlugin 通道化, 不认识业务事件）

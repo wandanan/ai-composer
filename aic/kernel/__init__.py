@@ -1,9 +1,9 @@
-"""agent-service-kit — 平台层（M0 验证版）。
+"""aic.kernel — AIComposer 内核（零业务机制层）。
 
-三层模型：平台（本包） + 业务插件 + 应用壳。
-- 平台: 内核（Context/事件总线/挂载卸载）+ 协议清单
-- 插件: 业务能力包（审查/编写/未来业务）
-- 应用壳: 组合平台与插件并启动（见 m0_main.py）
+三层模型：框架（本包） + 业务插件 + 应用壳。
+- 内核: Context（服务注册表/事件总线/挂载卸载）+ 契约检查
+- 插件: 业务能力包（inject/provides/apply）
+- 应用壳: 组合平台与插件并启动（见 test/m0_main.py）
 """
 from .kernel import (
     Context,

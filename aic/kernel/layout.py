@@ -7,7 +7,7 @@
 ① 存在性检查（客观完备）:
    装配组（必须齐全）:  __init__.py / profile.py / shell.py / tasks.py / worker.py
    入口组（至少一个）:  main.py(HTTP) / cli.py(CLI) —— 新形态建议登记（约定）
-   config/             必须为目录（shell.py 的 load_config 硬编码读它）
+   config/             必须为目录（配置由 profile 的 ConfigPlugin(path=...) 读取）
 ② 内容检查（AST, 打本质）:
    壳内自定义 .py（非装配组/入口组/test_*）不得:
    a. import extensions.*            → 直接拿实现, 违反消费纪律（get 不 import）
@@ -48,7 +48,7 @@ def check_shell_layout(app_dir: str | os.PathLike) -> None:
     校验项（收集式, 全部检查后一次性报错）:
       ① 装配组必须齐全
       ② 入口组至少一个
-      ③ config 存在则必须为目录（shell.py 的 load_config 硬编码读它）
+      ③ config 存在则必须为目录（配置由 profile 的 ConfigPlugin 读取）
     自定义文件/目录不检查存在性——内容由 check_shell_content 管。
     """
     if not os.path.isdir(app_dir):
@@ -68,7 +68,7 @@ def check_shell_layout(app_dir: str | os.PathLike) -> None:
     if not any(f in files for f in ENTRY_FILES):
         problems.append("缺少入口文件（main.py/cli.py 至少一个）")
 
-    # ③ config 存在但为文件 → 违规（load_config 硬编码读 config/config.local.ini）
+    # ③ config 存在但为文件 → 违规（ConfigPlugin 读 config/config.<APP_ENV>.ini）
     if "config" in entries and not os.path.isdir(os.path.join(app_dir, "config")):
         problems.append("config 应为目录")
 
@@ -126,9 +126,13 @@ def _is_extension_import(name: str) -> bool:
 
 
 def _is_plugin_base(base: ast.expr) -> bool:
-    """基类是否为 Plugin（名字末段为 Plugin, 如 Plugin / kernel.Plugin）。"""
+    """基类是否为 Plugin 子类基（名字以 Plugin 结尾: Plugin / kernel.Plugin / MyBasePlugin）。
+
+    末段匹配而非全等——自定义插件基类（如 `class X(MyBasePlugin)`）也属壳内
+    定义插件类（能力落在壳内, 违规）。
+    """
     name = getattr(base, "id", None) or getattr(base, "attr", None)
-    return isinstance(name, str) and name == "Plugin"
+    return isinstance(name, str) and name.endswith("Plugin")
 
 
 def check_shell_content(app_dir: str | os.PathLike) -> None:

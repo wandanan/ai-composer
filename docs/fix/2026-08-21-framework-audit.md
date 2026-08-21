@@ -40,10 +40,10 @@
 | 10 | LocalStorage 默认 root=mkdtemp（每进程新目录）→ worker 进程读不到 API 写入；与 sessions 稳定共享默认不一致 | `base/storage.py:51-52` vs `session/session_service.py:33-35` | ✅ |
 | 11 | DbPlugin 默认 `sqlite:///aic.db` 相对路径 → DB 位置随启动 cwd 漂移 | `base/db.py:17-18` | ✅ |
 | 12 | `apps/mvp/worker.py:60` `-A mvp_app.worker`：0.2.0 改名残留可执行字符串 | 实测 `import mvp_app` → ModuleNotFoundError → `python -m apps.mvp.worker` 直接启动必炸 | ✅ |
-| 13 | review workspace 每会话写进程级 `os.environ[TERMINAL_CWD/HERMES_GIT_BASH_PATH]` → 并发会话互覆 + unmount 残留 | `review/workspace.py:122-123` | ⬜ |
-| 14 | import 即写 hermes 全局注册表（绕 effect 桶）：`review/tools/save_review_report.py:124`、`standard/tool.py:96` 模块级 `_register()`；standard 双实例分叉（hermes 走默认实例、ctx 走构造注入实例） | unmount 不撤销；`aic caps` 枚举即留痕 | ⬜ |
-| 15 | StreamService.publish 每次新建 Redis 连接且不关闭；hermes `llm/stream` 无 session_id → bridge 警告跳过 | `stream/sse.py:88-95`、`hermes/__init__.py:88` | ⬜ |
-| 16 | RedisCache 惰性连接无降级 + `ex=int(ttl)` 截断（0<ttl<1 → Redis 报错）；MinerU multipart 拼装污染 + `started_at` 类型炸轮询；extract `use_ocr` 死参数；telemetry.events 无界增长 | `base/cache.py:72-92`、`extract/mineru_client.py:59-64,96,146`、`extract/__init__.py:23-55`、`base/telemetry.py` | ⬜ |
+| 13 | review workspace 每会话写进程级 `os.environ[TERMINAL_CWD/HERMES_GIT_BASH_PATH]` → 并发会话互覆 + unmount 残留 | `review/workspace.py:122-123` | ⏸️ 加注释标注约束（根治需 hermes 侧上下文传递, 边界检查本身走 ContextVar 已正确） |
+| 14 | import 即写 hermes 全局注册表（绕 effect 桶）：`review/tools/save_review_report.py:124`、`standard/tool.py:96` 模块级 `_register()`；standard 双实例分叉（hermes 走默认实例、ctx 走构造注入实例） | unmount 不撤销；`aic caps` 枚举即留痕 | ✅ |
+| 15 | StreamService.publish 每次新建 Redis 连接且不关闭；hermes `llm/stream` 无 session_id → bridge 警告跳过 | `stream/sse.py:88-95`、`hermes/__init__.py:88` | ✅ |
+| 16 | RedisCache 惰性连接无降级 + `ex=int(ttl)` 截断（0<ttl<1 → Redis 报错）；MinerU multipart 拼装污染 + `started_at` 类型炸轮询；extract `use_ocr` 死参数；telemetry.events 无界增长 | `base/cache.py:72-92`、`extract/mineru_client.py:59-64,96,146`、`extract/__init__.py:23-55`、`base/telemetry.py` | ✅ |
 
 ---
 
@@ -54,11 +54,11 @@
 | 17 | 能力面校验禁止条件注册（实证「有 key 才注册」→ 装配拒绝） | 合理但推论未文档化：引擎插件必须无条件注册 + apply 校验配置。OpenAI/Hermes 插件目前不校验空配置 → 空 key 装配成功、首对话才炸，违背大声失败 | ✅ |
 | 18 | 无可选依赖概念：inject 全强制 | WriterPlugin inject 含 `renderers` 又 try/except → docstring「未挂载 md 兜底」是谎言；file_convert 可选 stream 消费无拓扑保证、顺序错静默跳过（`writer/plugin.py:23,32-35`、`file_convert/plugin.py:71-75`） | ✅ |
 | 19 | 无聚合键语义：`"tasks"`/`"knowledge"` 同 key 后挂载整体覆盖 | 共挂 review+writer → 一方任务字典消失 → KeyError；renderers 注册表对象（merge 安全）vs tasks dict 覆盖（危险）两范式并存，init 模板把危险范式复制给每个新插件（`init.py:242`） | ✅ |
-| 20 | TYPE_CHECKING import 也被旁路扫描 → 业务插件无法类型标注平台服务，只能 Any | `kernel/imports.py` ast.walk 不区分 | ⬜ |
+| 20 | TYPE_CHECKING import 也被旁路扫描 → 业务插件无法类型标注平台服务，只能 Any | `kernel/imports.py` ast.walk 不区分 | ✅ |
 | 21 | ctx.get 不校验 inject 声明 → uninstall/promote/blast_radius 信任的 inject 元数据纯属自愿 | writer 消费 `agentLoop` 未声明（`writer/pipeline.py:39` vs `plugin.py:23`） | ✅ |
 | 22 | profile「组合点自由」vs graph AST 扫描子集矛盾：`PLUGINS` 只认字面列表；`_scan_dynamic` 只认 `plugins = PLUGINS + [X()]` 一种形态 → mvp ConfigPlugin 覆盖、review register_task 块不可见 →「dynamic=[]」假清白；graph 少报挂载时 uninstall 可能误删「看似专属」插件 | `tools/graph.py:57-88,91-107` | ✅ |
 | 23 | graph 以类名为键：用户/框架空间同名插件 → 框架条目静默覆盖用户条目 → 工具链分析错对象 | `tools/graph.py:230-233` | ✅ |
-| 24 | `check_bypass_imports` 不扫 `aic/apps`（hello_aic 漏检）；组合面判定同行混 import 可绕过；`_is_plugin_base` 只认基类名恰为 Plugin | `kernel/imports.py:193`、`kernel/layout.py:128-131` | ⬜ |
+| 24 | `check_bypass_imports` 不扫 `aic/apps`（hello_aic 漏检）；组合面判定同行混 import 可绕过；`_is_plugin_base` 只认基类名恰为 Plugin | `kernel/imports.py:193`、`kernel/layout.py:128-131` | ✅ |
 
 ---
 
@@ -67,12 +67,12 @@
 | # | 违规 | 证据 | 状态 |
 |---|---|---|---|
 | 25 | 插件反向 import 应用壳（方向倒置，检查器四型之一）：`from apps.review.tasks import TASK_EXECUTE_REVIEW` | `review/service.py:564`，靠 `_DEFAULT_EXCLUDED` 豁免未被抓 → ReviewPlugin 不可移植，template 提取即坏 | ✅ |
-| 26 | `_DEFAULT_EXCLUDED` 把整个 review 业务线豁免于旁路检查 → 最大业务插件不受核心纪律约束（#25 直接后果） | `kernel/imports.py:51` | ⬜ |
-| 27 | template 硬编码插件构造知识：`_mount_line` 特判 ConfigPlugin/JobsPlugin；生成的 ConfigPlugin 挂载行无 APP_ENV 选择（与 init 模板不一致） | `tools/template.py:184-191` | ⬜ |
-| 28 | template `_IMPORT_TO_PKG` 与 pyproject dependencies 双源手动同步；import 反推漏未知包 → 模板缺依赖 | `tools/template.py:35-43` | ⬜ |
-| 29 | promote 三处：`--to ../x` 可逃出项目根；`_write_public` 静默不写却照打「已写入」（文件任意处含 `PUBLIC = True` 子串即跳过，注释也算）；`_verify` 只验布局不验重写后 import 可用性 → 假绿 | `tools/promote.py:115-126,91-103,178-192` | ⬜ |
-| 30 | caps：hermes 存在却永不出现在引擎清单（loops/__init__ 不导出）；`_SECTIONS` 死常量；`engines = ...` 赋值非 extend；self 剥离死代码 → 换法列噪音 | `tools/caps.py:28,73-79,157-162` | ⬜ |
-| 31 | 文档漂移一族：mvp profile/main/shell 仍描述已删的 KIT_ENGINE；`layout.py:10` 还说「shell.py 的 load_config 硬编码读它」；kernel docstring 旧品牌 agent-service-kit；教程 `foundation.md:363` emit `convert/done` 用 `{file}` 而插件声明 `{output}`（照抄即炸）；tutorial 03/04/08 todo 示例存在于 `aic/tools/assets/skills/`（随 aic init 分发） | 多处 | ⬜ |
+| 26 | `_DEFAULT_EXCLUDED` 把整个 review 业务线豁免于旁路检查 → 最大业务插件不受核心纪律约束（#25 直接后果） | `kernel/imports.py:51` | ✅ |
+| 27 | template 硬编码插件构造知识：`_mount_line` 特判 ConfigPlugin/JobsPlugin；生成的 ConfigPlugin 挂载行无 APP_ENV 选择（与 init 模板不一致） | `tools/template.py:184-191` | ✅ |
+| 28 | template `_IMPORT_TO_PKG` 与 pyproject dependencies 双源手动同步；import 反推漏未知包 → 模板缺依赖 | `tools/template.py:35-43` | ✅ |
+| 29 | promote 三处：`--to ../x` 可逃出项目根；`_write_public` 静默不写却照打「已写入」（文件任意处含 `PUBLIC = True` 子串即跳过，注释也算）；`_verify` 只验布局不验重写后 import 可用性 → 假绿 | `tools/promote.py:115-126,91-103,178-192` | ✅ |
+| 30 | caps：hermes 存在却永不出现在引擎清单（loops/__init__ 不导出）；`_SECTIONS` 死常量；`engines = ...` 赋值非 extend；self 剥离死代码 → 换法列噪音 | `tools/caps.py:28,73-79,157-162` | ✅ |
+| 31 | 文档漂移一族：mvp profile/main/shell 仍描述已删的 KIT_ENGINE；`layout.py:10` 还说「shell.py 的 load_config 硬编码读它」；kernel docstring 旧品牌 agent-service-kit；教程 `foundation.md:363` emit `convert/done` 用 `{file}` 而插件声明 `{output}`（照抄即炸）；tutorial 03/04/08 todo 示例存在于 `aic/tools/assets/skills/`（随 aic init 分发） | 多处 | ✅ |
 
 ---
 
@@ -122,3 +122,20 @@ m2/m3 外部依赖段（hermes provider、test/biz 路径）为既有环境问�
 **回归**: m0–m7/m1b 全绿; graph 边数 80→83（inject_optional 边）, m7 t04 动态断言更新为 mvp ConfigPlugin。
 
 **下一批**: P3（#13-#16、#20、#24、#26-#31 卫生项）。
+
+### 2026-08-21 P3（已完成, 回归全绿）
+
+- **#14 hermes 注册表生命周期**（`standard/tool.py`、`review/tools/save_review_report.py`、两插件 apply）: 模块级 `_register()` 删除 → `register_xxx_tool(tool) -> disposer|None`, 由插件 apply 挂载时注册 + `ctx.effect` 注销（unmount 零残留）。顺带消 standard 双实例分叉（hermes 侧与 ctx 侧现为同一构造注入实例）。实证: mount 注册 / unmount 注销 / import 无副作用。
+- **#13 进程级 env 标注**: workspace 加注释说明 TERMINAL_CWD 是进程级全局、hermes 终端工具不认 ContextVar、边界检查本身已走 ContextVar（线程隔离正确）——根治需 hermes 侧支持（⏸️）。
+- **#15 StreamService 连接**: 惰性单 Redis 客户端（`_redis()` 复用, 不再每 publish 新建连接泄漏）。
+- **#16 平台服务四小项**: RedisCache `ex=int(ttl)` → `px=max(1,int(ttl*1000))` 保亚秒; MinerU multipart `b"\r\n".join` → `b"".join`（文件字节原样）+ `started_at` 类型安全 `_elapsed_seconds`; extract `use_ocr` 死参数 → 接线 MinerU parse_method（local 忽略）; telemetry events 环形缓冲上限。
+- **#20 TYPE_CHECKING 豁免**（`imports.py`）: `if TYPE_CHECKING:` 块内 import 放行（业务插件可类型标注平台服务）。
+- **#24 检查器三处**: `check_bypass_imports` 纳入 `aic/apps`（hello_aic 漏检修复）; 组合面按名字逐个判定（`from X import Impl, Plugin` 不再整条放行）; `_is_plugin_base` 末段 `endswith("Plugin")` 匹配。
+- **#26 review 豁免收敛**: `_DEFAULT_EXCLUDED` 从 `("apps/review", "extensions/business/review")` 精确到 `("apps/review/main.py", "apps/review/tasks.py")`（壳 ORM 直连 + 任务名常量 re-export, 均注释说明）; extensions 侧零违规。m6 t28 拆为收敛后两个断言。
+- **#27 template**: `_mount_line` ConfigPlugin 补 APP_ENV 文件选择; 生成的 profile.py 补 `import os`（此前引用 `os.environ` 会 NameError）。
+- **#28 template 依赖**: 未知第三方 import 保守保留 + ⚠️ 提示（不再静默缺包）; 注释标注 `_IMPORT_TO_PKG` 与 pyproject 一致。
+- **#29 promote 三处**: `_resolve_target` commonpath 防逃出项目根; `_write_public` 类作用域精确判定（注释/他类 `PUBLIC = True` 不再误判"已存在"）+ 兼容无括号/多行基类; `_verify` 增加 profile 导入烟测; 成功文案按 `marker_written` 条件化。
+- **#30 caps 四处**: `_SECTIONS` 死常量删; self 剥离（`__init__ is object.__init__` → 无换法）修好; `engines =` → `extend`; hermes 引擎纳入引擎清单（仓库模式）。
+- **#31 文档漂移**: layout.py "load_config 硬编码"（2 处）→ ConfigPlugin; kernel/kernel.py + kernel/__init__.py 旧品牌 agent-service-kit → AIComposer（并补 inject_optional/覆盖栈语义）; foundation.md convert/done `{file}` → `{output}`; graph-viz tooltip "KIT_ENGINE" → "shell 条件组合"; mvp main.py "mvp_app" → "apps/mvp"。todo 教程示例（03/04/08 及 6 份镜像）作教学示例保留, 非错误。
+
+**回归**: m0–m7/m1b(--skip-real) 全绿（m6 45 通过）。审计 31 项: 30 ✅ + 1 ⏸️（#13 hermes 上游约束）。

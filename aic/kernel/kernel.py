@@ -1,14 +1,15 @@
-"""kit/kernel.py — agent-service-kit 内核 v0.1（M0 验证版）
+"""aic/kernel/kernel.py — AIComposer 内核（零业务）。
 
 协议执行机制，零业务：服务注册表 + 事件总线 + 可逆效果。
 设计依据: docs/design/kernel-design.md 第五节。
 
-M0 落地决策（与设计文档的差异）:
+落地决策（与设计文档的差异）:
 - 插件挂载采用「共享作用域 + 每插件效果桶」：所有插件 apply 进同一上下文，
   每个插件的注册由独立 bucket 记账，unmount 只撤销自己的（互不误伤）。
 - 插件声明 `provides`（提供哪些服务 key）以支持 inject 拓扑装配；
-  dsh 的"声明 inject 即等待"延迟装配留到 M1。
-- fork()/子上下文隔离作用域 API 保留，M1 用于会话级 scope。
+  另有 `inject_optional`（可选依赖: 有提供者则排序, 缺席不报错）。
+- 同 key 后注册覆盖; register 维护 per-key 栈, 撤销覆盖者恢复前一个实现。
+- fork()/子上下文隔离作用域 API 保留，用于会话级 scope。
 """
 from __future__ import annotations
 

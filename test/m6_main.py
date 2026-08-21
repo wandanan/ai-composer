@@ -470,19 +470,34 @@ def t27_bypass_relative_escape() -> None:
 
 
 def t28_bypass_review_excluded() -> None:
+    """豁免收敛: 精确到文件（apps/review/main.py + tasks.py）, 不再整条业务线。"""
     with tempfile.TemporaryDirectory() as base:
         _make_project(base, {
             "apps/review/main.py":
                 "from aic.extensions.platform.base.storage import LocalStorage\n",
+            "apps/review/tasks.py":
+                "from extensions.business.review.task import TASK_EXECUTE_REVIEW\n",
+        })
+        # 两个精确豁免文件 → 放行
+        try:
+            check_bypass_imports(base)
+            check("t28 review 精确豁免文件放行", True)
+        except RuntimeError as e:
+            print(f"    {e}")
+            check("t28 review 精确豁免文件放行", False)
+
+    # 非豁免文件（extensions 侧反向 import）→ 仍要拦（收敛后不再整线豁免）
+    with tempfile.TemporaryDirectory() as base:
+        _make_project(base, {
             "extensions/business/review/plugin.py":
                 "from apps.review.tasks import TASK_X\n",
         })
         try:
             check_bypass_imports(base)
-            check("t28 review 业务线整体排除扫描", True)
+            check("t28 豁免收敛: extensions 侧反向 import 仍拦", False)
         except RuntimeError as e:
-            print(f"    {e}")
-            check("t28 review 业务线整体排除扫描", False)
+            check("t28 豁免收敛: extensions 侧反向 import 仍拦",
+                  "扩展反向 import 应用壳" in str(e))
 
 
 def t30_stream_bridge() -> None:

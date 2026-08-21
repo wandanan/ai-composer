@@ -43,12 +43,17 @@ import os
 UTILITY_MODULES = (
     "aic.extensions.platform.extract",
     "aic.extensions.platform.session.artifacts",
+    "aic.extensions.platform.security.sanitize",
 )
 
-# 项目级业务排除默认值（本仓库 review 业务线的豁免配置——卫生问题随业务线处理）;
+# 项目级业务排除默认值（精确到文件, 非整条业务线）:
+#   apps/review/main.py — 壳端点直连 ORM 模型（ReviewFile/ReviewMessage）做 DB 查询,
+#     属遗留架构债（应下沉到 review 服务）, 待独立重构。
+#   apps/review/tasks.py — 任务名常量 re-export（单一来源在 review/task.py）,
+#     壳按任务名协议取常量（方向正确, 但检查器把常量 import 判为直连实现）。
 # 机制不依赖任何业务名: 可通过 check_bypass_imports(exclude=...) 或
 # 环境变量 KIT_EXCLUDED_DIRS（逗号分隔相对路径）覆盖
-_DEFAULT_EXCLUDED = ("apps/review", "extensions/business/review")
+_DEFAULT_EXCLUDED = ("apps/review/main.py", "apps/review/tasks.py")
 
 
 def _resolve_exclude(exclude: tuple[str, ...] | None) -> tuple[str, ...]:
@@ -97,11 +102,13 @@ def _relative_target(root: str, level: int, module: str | None) -> str:
     return f"{base}.{module}" if module and base else (base or "")
 
 
-def _is_composition_surface(target: str, names: list[str]) -> bool:
-    """组合面: loops 包（引擎组合）或 *Plugin 结尾的适配器类。"""
+def _app_surface_ok(target: str, names: list[str]) -> bool:
+    """应用壳组合面判定（按名字逐个, 非整条放行）。"""
+    # loops 包: 引擎组合, 整体放行
     if target.endswith(".loops") or ".loops." in target:
         return True
-    return any(n.endswith("Plugin") for n in names)
+    # 逐名: 全部 *Plugin 结尾才算组合面（ast.Import 的 names 为空 → 非组合面）
+    return bool(names) and all(n.endswith("Plugin") for n in names)
 
 
 def _is_utility(target: str) -> bool:
@@ -120,6 +127,32 @@ def _reason(target: str, root: str) -> str:
     return "跨扩展根包旁路（应走 ctx 服务, 或声明公共工具: UTILITY_MODULES）"
 
 
+def _type_checking_imports(tree: ast.AST) -> set[int]:
+    """收集位于 `if TYPE_CHECKING:` 块内的 Import/ImportFrom 节点 id（类型标注用途, 运行时不存在）。"""
+    ids: set[int] = set()
+
+    def _is_tc_test(node: ast.AST) -> bool:
+        if isinstance(node, ast.Name):
+            return node.id == "TYPE_CHECKING"
+        if isinstance(node, ast.Attribute):
+            return node.attr == "TYPE_CHECKING"
+        return False
+
+    def _walk(node: ast.AST, in_tc: bool) -> None:
+        if isinstance(node, ast.If):
+            tc = in_tc or _is_tc_test(node.test)
+            for child in ast.iter_child_nodes(node):
+                _walk(child, tc)
+            return
+        if in_tc and isinstance(node, (ast.Import, ast.ImportFrom)):
+            ids.add(id(node))
+        for child in ast.iter_child_nodes(node):
+            _walk(child, in_tc)
+
+    _walk(tree, False)
+    return ids
+
+
 def _scan_file(path: str, rel: str) -> list[str]:
     """AST 扫描单文件, 返回旁路违规清单（确定性: 按节点出现顺序）。"""
     try:
@@ -134,6 +167,7 @@ def _scan_file(path: str, rel: str) -> list[str]:
     is_app = root.startswith(("apps.", "aic.apps."))
     is_profile = os.path.basename(path) == "profile.py"
 
+    tc_imports = _type_checking_imports(tree)
     problems: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -143,6 +177,11 @@ def _scan_file(path: str, rel: str) -> list[str]:
                       if node.level else node.module or "")
             targets = [(target, [a.name for a in node.names])]
         else:
+            continue
+
+        # TYPE_CHECKING 块内的 import 放行: 仅类型标注用途, 运行时不存在——
+        # 业务插件靠它标注平台服务（如 ConfigService）, 属契约面而非旁路实现。
+        if id(node) in tc_imports:
             continue
 
         for target, names in targets:
@@ -169,8 +208,10 @@ def _scan_file(path: str, rel: str) -> list[str]:
             # 声明工具白名单: 无状态纯函数公共 API, 任意层可 import
             if _is_utility(target):
                 continue
-            # apps 文件: 组合面（*Plugin 结尾 / loops 包）
-            if is_app and _is_composition_surface(target, names):
+            # apps 文件: 组合面（loops 包整体放行; 逐名 *Plugin 类全合规才放行——
+            # `from base.storage import LocalStorage, StoragePlugin` 里
+            # LocalStorage 是旁路实现, 仍拦）
+            if is_app and _app_surface_ok(target, names):
                 continue
             problems.append(
                 f"{rel}:{node.lineno} import {target}（{_reason(target, root)}）")
@@ -189,8 +230,10 @@ def check_bypass_imports(project_root: str | os.PathLike,
     project_root = os.path.abspath(project_root)
     excluded = _resolve_exclude(exclude)
     problems: list[str] = []
-    # 扫描三区: 根 apps/（壳）+ 根 extensions/（用户业务）+ aic/extensions/（框架）
-    for base in ("apps", "extensions", os.path.join("aic", "extensions")):
+    # 扫描四区: 根 apps/（壳）+ 根 extensions/（用户业务）+ aic/extensions/（框架平台）
+    #          + aic/apps/（示例壳 hello_aic——之前漏检, 与根 apps 同契约）
+    for base in ("apps", "extensions",
+                 os.path.join("aic", "extensions"), os.path.join("aic", "apps")):
         base_dir = os.path.join(project_root, base)
         if not os.path.isdir(base_dir):
             continue

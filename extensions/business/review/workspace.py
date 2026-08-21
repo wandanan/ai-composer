@@ -117,6 +117,10 @@ def setup_session_workspace(ctx, session_id: str, skill_id: str = "",
         sandbox.lock_dir_readonly(sk_dir)
 
     # bash 路径 + TERMINAL_CWD（引擎 shell 工具）
+    # 注意（已知约束）: 这两个环境变量是进程级全局——hermes 终端工具直接读
+    # os.environ, 不认沙箱 ContextVar。并发会话（同 worker 多线程）会互相覆写;
+    # 边界检查本身走下方 ContextVar（线程隔离, 正确）, 此处仅为 hermes 终端
+    # 显示/相对路径兼容。根治需 hermes 侧支持上下文传递（见 docs/fix 审计 #13）。
     bash = find_bash()
     if bash:
         os.environ["HERMES_GIT_BASH_PATH"] = bash

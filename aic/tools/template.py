@@ -31,7 +31,9 @@ from aic.tools.uninstall import _pkg_dir
 _BASE_FILES = ()
 _DOCS_LEARN = "docs/learn"
 
-# 第三方包: import 名 → requirements 包名（import 名 ≠ 包名的映射, 如 fitz→pymupdf）
+# 第三方包: import 名 → requirements 包名（import 名 ≠ 包名的映射, 如 fitz→pymupdf）。
+# 与 pyproject.toml [project].dependencies 保持一致（单一事实源 = pyproject）;
+# 此处只是 import 名的翻译表——import 名无法从包名反推（fitz→pymupdf 无规律）。
 _IMPORT_TO_PKG = {
     "fastapi": "fastapi", "uvicorn": "uvicorn", "celery": "celery",
     "redis": "redis", "docx": "python-docx", "pydantic": "pydantic",
@@ -72,8 +74,19 @@ def _generate_requirements(out_dir: str, src_req: str) -> None:
     业务专属依赖不会被带入模板——模板是地基, 按需自加。
     """
     imports = _scan_imports(out_dir)
+    # 未知第三方 import（不在翻译表、也非标准库）→ 按 import 名保守保留 + 提示,
+    # 避免"公共插件用了新依赖但模板静默缺依赖"（漏包比多包更危险）。
+    known = set(_IMPORT_TO_PKG) | {"aic", "apps", "extensions", "typing", "os", "sys",
+                                  "json", "re", "io", "abc", "contextlib", "enum",
+                                  "logging", "hashlib", "urllib", "tempfile", "time",
+                                  "uuid", "threading", "asyncio", "subprocess", "queue",
+                                  "pathlib", "dataclasses", "collections", "contextvars"}
+    unknown_thirdparty = sorted(imp for imp in imports
+                                if imp not in known and not imp.startswith("_")
+                                and "." not in imp)
     needed = sorted({pkg for imp, pkg in _IMPORT_TO_PKG.items()
-                     if imp in imports} | set(_MANDATORY_PKGS))
+                     if imp in imports} | set(_MANDATORY_PKGS)
+                    | set(unknown_thirdparty))
 
     # 版本约束从源 requirements 继承（保留原行: fastapi>=0.110）;
     # 源缺失（纯 init 项目无 requirements.txt）→ 无约束, 只按模板 import 反推
@@ -91,6 +104,8 @@ def _generate_requirements(out_dir: str, src_req: str) -> None:
         "# ai-composer 模板依赖（aic.tools.template 自动生成: 按模板实际 import 过滤）",
         "# 内核纯标准库零依赖; 以下为公共插件 + hello_aic 实际需要的依赖",
     ]
+    if unknown_thirdparty:
+        lines.append("# ⚠️ 以下为未在翻译表登记的第三方 import, 按名保留, 请人工核对包名")
     lines += [f"{pkg}{constraints.get(pkg, '')}" for pkg in needed]
     with open(os.path.join(out_dir, "requirements.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -184,8 +199,9 @@ def _plugin_pkg_copy(root: str, graph: dict, out_dir: str) -> list[str]:
 def _mount_line(cls: str, info: dict) -> str:
     """生成 profile 挂载行（特殊构造: ConfigPlugin 传路径, JobsPlugin 传 app_pkg）。"""
     if cls == "ConfigPlugin":
+        # 与 init 模板一致: APP_ENV 文件选择（config.<APP_ENV>.ini, 默认 local）
         return ('    ConfigPlugin(path=__file__.replace("profile.py", '
-                '"config/config.local.ini")),')
+                'f"config/config.{os.environ.get(\'APP_ENV\', \'local\')}.ini")),')
     if cls == "JobsPlugin":
         return '    JobsPlugin(app_pkg="hello_aic"),   # 任务名协议（机制强制）'
     return f"    {cls}(),"
@@ -219,7 +235,8 @@ def _write_hello_aic(out_dir: str, graph: dict) -> None:
                               ).replace(os.sep, ".")
         by_pkg.setdefault(pkg, []).append(cls)
 
-    lines = [f'"""apps/{name}/profile.py — 示例应用: 挂载模板全部公共插件。"""']
+    lines = [f'"""apps/{name}/profile.py — 示例应用: 挂载模板全部公共插件。"""',
+             "import os"]
     for pkg in sorted(by_pkg):
         classes = ", ".join(sorted(by_pkg[pkg]))
         lines.append(f"from {pkg} import {classes}")

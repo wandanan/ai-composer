@@ -89,17 +89,34 @@ def _replace_refs(path: str, old: str, new: str) -> int:
 
 
 def _write_public(path: str, cls: str) -> bool:
-    """插件类定义后写入 PUBLIC = True 标记。已有则跳过, 返回是否写入。"""
+    """插件类定义后写入 PUBLIC = True 标记。已有则跳过, 返回是否写入。
+
+    精确到类作用域: 只在该类体内找已有标记（注释/他类/模块级的
+    `PUBLIC = True` 子串不算——避免"已存在"误判静默跳过）。
+    """
     with open(path, encoding="utf-8") as f:
-        content = f.read()
-    if "PUBLIC = True" in content:
-        return False
-    m = re.search(rf"^class {cls}\(.*\):", content, re.MULTILINE)
-    if not m:
-        return False
-    insert = m.group(0) + "\n    PUBLIC = True  # 公共插件: 不随任何应用卸载删除（aic.tools.promote 写入）"
+        lines = f.read().split("\n")
+    # 类头: `class X:` / `class X(...):`（兼容多行基类, 只找 `class X` 起始行）
+    header_idx = None
+    for i, line in enumerate(lines):
+        if re.match(rf"^class {cls}\b", line):
+            header_idx = i
+            break
+    if header_idx is None:
+        return False   # 找不到类定义（装饰器包裹/拼写不一致）——无法安全插入
+    # 类体（更深缩进行, 直到缩进回到 <= 类头缩进）内是否已有 PUBLIC = True
+    body_indent = len(lines[header_idx]) - len(lines[header_idx].lstrip())
+    for line in lines[header_idx + 1:]:
+        stripped = line.lstrip()
+        if line.strip() and (len(line) - len(stripped)) <= body_indent:
+            break   # 类体结束（dedent 到类头或更浅）
+        if re.match(r"^PUBLIC\s*=\s*True\b", stripped):
+            return False   # 该类已标记
+    # 类头后插入标记
+    insert = lines[header_idx] + "\n    PUBLIC = True  # 公共插件: 不随任何应用卸载删除（aic.tools.promote 写入）"
+    lines[header_idx] = insert
     with open(path, "w", encoding="utf-8") as f:
-        f.write(content[:m.start()] + insert + content[m.end():])
+        f.write("\n".join(lines))
     return True
 
 
@@ -119,7 +136,12 @@ def _resolve_target(root: str, to: str, src_pkg: str) -> str:
         base = os.path.join(root, "extensions", to)
     else:
         base = os.path.join(root, to)
-    target = os.path.join(base, pkg_name)
+    target = os.path.normpath(os.path.join(base, pkg_name))
+    # 逃逸防护: 目标必须仍在项目根内（--to ../x / 绝对路径都会让 normpath 跳出 root）
+    root_norm = os.path.normpath(root)
+    if os.path.commonpath([root_norm, target]) != root_norm:
+        raise SystemExit(
+            f"❌ 目标目录逃出项目根: {to}（target={target} 不在 {root_norm} 内）")
     rel = os.path.relpath(target, root)
     if rel.split(os.sep)[0] in _GROUND:
         raise SystemExit(f"❌ 插件不得进入地基目录: {_GROUND}（target={rel}）")
@@ -176,9 +198,12 @@ def promote(root: str, graph: dict, cls: str, to: str,
 
 
 def _verify(graph: dict) -> list[str]:
-    """上浮后验证: 剩余应用过壳布局契约（存在性 + 内容 AST）。"""
+    """上浮后验证: 剩余应用过壳布局契约 + profile 可导入（重写后 import 可用）。"""
     from aic.kernel import check_shell_content, check_shell_layout
+    import importlib
     root = _root()
+    if root not in sys.path:
+        sys.path.insert(0, root)
     problems: list[str] = []
     for app in graph["apps"]:
         app_dir = os.path.join(root, "apps", app)
@@ -189,6 +214,10 @@ def _verify(graph: dict) -> list[str]:
                 check(app_dir)
             except RuntimeError as e:
                 problems.append(f"{app}: {e}")
+        try:
+            importlib.import_module(f"apps.{app}.profile")
+        except Exception as e:  # noqa: BLE001 — import 重写断裂必须暴露（此前假绿）
+            problems.append(f"{app}: profile 导入失败（上浮引用重写可能断裂）: {e}")
     return problems
 
 
@@ -241,7 +270,9 @@ def main(argv: list[str] | None = None) -> None:
         for msg in problems:
             print(f"  {msg}")
         raise SystemExit(1)
-    print("\n✅ 上浮完成: 包已移动、引用已更新、PUBLIC 标记已写入。"
+    marker = report.get("marker_written")
+    marker_msg = "已写入" if marker else "未写入（类定义未找到, 请手工补 PUBLIC = True）"
+    print(f"\n✅ 上浮完成: 包已移动、引用已更新、PUBLIC 标记 {marker_msg}。"
           "\n   （在各应用 profile 挂载即可共享; 卸载应用时该插件保留, 可单独 uninstall --plugin）")
 
 

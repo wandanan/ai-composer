@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from typing import Callable
 from urllib.request import ProxyHandler, Request, build_opener
 
 logger = logging.getLogger(__name__)
@@ -76,21 +77,25 @@ class StandardSearchTool:
             return json.dumps({"error": f"standard_search failed: {e}"}, ensure_ascii=False)
 
 
-def _register() -> None:
+def register_standard_tool(tool: "StandardSearchTool") -> "Callable[[], None] | None":
+    """把给定实例注册进 hermes 工具系统, 返回注销 disposer（非 hermes 环境返回 None）。
+
+    生命周期归插件 apply（mount 注册 / unmount 注销）——不在模块级自注册:
+    import 无副作用, 且 hermes 注册表里的就是插件构造注入配置的同一实例
+    （旧实现模块级注册默认实例, 与 ctx 里的配置实例双实例分叉）。
+    """
     try:
         from tools.registry import registry
-        tool = StandardSearchTool()
-        registry.register(
-            name=tool.name,
-            toolset=tool.toolset,
-            schema=tool.schema,
-            handler=tool.handle,
-            check_fn=None,
-            description="在本地标准/规范知识库中检索条目",
-            emoji="📚",
-        )
     except ImportError:
         logger.debug("[standard] tools.registry 未安装（非 hermes 环境），跳过 standard_search 注册")
-
-
-_register()
+        return None
+    registry.register(
+        name=tool.name,
+        toolset=tool.toolset,
+        schema=tool.schema,
+        handler=tool.handle,
+        check_fn=None,
+        description="在本地标准/规范知识库中检索条目",
+        emoji="📚",
+    )
+    return lambda: registry.deregister(tool.name)
