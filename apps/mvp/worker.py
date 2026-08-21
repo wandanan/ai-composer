@@ -1,9 +1,9 @@
 """mvp_app/worker.py — Celery worker 入口（真实执行路径）。
 
 启动（需 Redis broker 可用）:
-    python -m mvp_app.worker                       # 直接启动（含 worker 子进程管理）
+    python -m apps.mvp.worker                     # 直接启动（含 worker 子进程管理）
     或标准方式:
-    celery -A mvp_app.worker worker -Q review --pool=threads --loglevel=info
+    celery -A apps.mvp.worker worker -Q mvp,mvp_followup --pool=threads --loglevel=info
 """
 from __future__ import annotations
 
@@ -57,9 +57,9 @@ def main() -> None:
 
     concurrency = os.environ.get("KIT_WORKER_CONCURRENCY", "4")
     subprocess.run([
-        sys.executable, "-m", "celery", "-A", "mvp_app.worker", "worker",
+        sys.executable, "-m", "celery", "-A", "apps.mvp.worker", "worker",
         "--loglevel=info", "--pool=threads", f"--concurrency={concurrency}",
-        "-n", "mvp@%h", "-Q", "review,followup",   # 审查 + 追问双队列
+        "-n", "mvp@%h", "-Q", "mvp,mvp_followup",   # 应用域队列（与他应用隔离, 防跨应用偷任务）
     ], check=False)
 
 

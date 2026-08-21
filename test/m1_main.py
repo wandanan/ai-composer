@@ -19,6 +19,7 @@ from aic.kernel import Context, boot
 from aic.extensions.platform.loops import FakeLoop
 from aic.extensions.platform.loops import AgentLoop
 from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.agent import TasksPlugin
 from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import CHAPTER_REPLY, OUTLINE_REPLY
@@ -44,7 +45,7 @@ def main() -> int:
         "编制依据": CHAPTER_REPLY,
     })
     app.register("agentLoop", v1)                      # 平台注册引擎（可被覆盖）
-    boot(app, [RenderPlugin(), SessionPlugin(), WriterPlugin()])
+    boot(app, [RenderPlugin(), SessionPlugin(), TasksPlugin(), WriterPlugin()])
 
     print("\n[1] AgentLoop 引擎协议")
     loop = app.get("agentLoop")

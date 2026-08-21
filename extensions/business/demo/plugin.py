@@ -45,13 +45,15 @@ class DemoTask:
 class DemoPlugin(Plugin):
     """演示插件：提供 greeter 服务 + 一个任务 + 事件监听。"""
 
-    inject = ["config"]           # 依赖平台基础服务
-    provides = ["greeter", "tasks"]
+    inject = ["config", "tasks"]    # 平台基础服务 + 任务注册表（聚合键）
+    provides = ["greeter"]
 
     def apply(self, ctx: Context):
-        cfg = ctx.get("config")
-        ctx.register("greeter", Greeter(f"demo-plugin[{cfg.get('mode', '?')}]"))
-        ctx.register("tasks", {DemoTask.id: DemoTask()})
+        cfg = ctx.get("config")   # ConfigService（双参: section/key）, 非 dict
+        provider = cfg.get("llm", "LLM_PROVIDER", "unset")
+        ctx.register("greeter", Greeter(f"demo-plugin[{provider}]"))
+        # 聚合键范式: 任务登记进平台注册表（effect 记账, unmount 撤销）
+        ctx.effect(ctx.get("tasks").register(DemoTask()))
 
         # 事件契约（0.2.1 事件注册表）: 演示事件声明（render/path 与 tasks/notify 为字符串 payload）
         for evt, fields in (("app/started", {"sid"}),

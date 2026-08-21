@@ -1,8 +1,8 @@
 """mvp_app/main.py — 编写应用 MVP：FastAPI 可运行 + 全插件装配。
 
 运行:
-    PYTHONIOENCODING=utf-8 python -m uvicorn mvp_app.main:app --port 8007
-    （KIT_ENGINE=hermes 用真实引擎; 默认 fake 免 API 成本）
+    PYTHONIOENCODING=utf-8 python -m uvicorn apps.mvp.main:app --port 8007
+    （引擎是部署决策: profile.py 挂引擎插件即覆盖默认 fake, 免 API 成本）
     任务: Redis 可用 → Celery worker; 不可用 → 线程池降级（自动）
 """
 from __future__ import annotations
@@ -81,7 +81,7 @@ async def create_conversation(req: CreateConversationReq):
             jobs.register_task(TASK_REVISE, revise)
             jobs.enqueue(TASK_RUN_PIPELINE,
                          [session.session_id, req.project_info, req.chapters],
-                         queue="review")
+                         queue="mvp")
             while True:
                 try:
                     item = await asyncio.to_thread(q.get, timeout=15)
@@ -123,7 +123,7 @@ async def revise(session_id: str, req: ReviseReq):
     except Exception:
         raise HTTPException(status_code=404, detail="会话不存在")
     task_id = shell.get("jobs").enqueue(TASK_REVISE, [session_id, req.feedback],
-                                        queue="followup")
+                                        queue="mvp_followup")
     return {"session_id": session_id, "task_id": task_id}
 
 

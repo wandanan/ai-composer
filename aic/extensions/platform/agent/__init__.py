@@ -7,7 +7,9 @@ AI 业务协议的归宿: 与 base/session/extract 等平台能力并列, 不进
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
+
+from aic.kernel import Context, Plugin
 
 
 class Phase(StrEnum):
@@ -62,4 +64,58 @@ class KnowledgeProvider(Protocol):
         ...
 
 
-__all__ = ["AgentTask", "KnowledgeProvider", "Phase", "ToolHandler"]
+class TaskRegistry:
+    """AgentTask 注册表（聚合键语义: 多业务插件共挂时各自登记, 互不覆盖）。
+
+    与 RenderRegistry 同构: "tasks" 是多提供方聚合键, 不能用 ctx.register
+    的"同 key 后注册覆盖"语义（共挂 review+writer 会互删任务字典）。
+    register 返回 disposer（插件 ctx.effect 登记 → unmount 撤销自己的任务,
+    同名替换可恢复——与内核 register 的 per-key 栈同语义）。
+    """
+
+    def __init__(self):
+        self._tasks: dict[str, Any] = {}
+
+    def register(self, task: Any) -> Callable[[], None]:
+        """登记任务（按 task.id）, 返回 disposer（撤销; 同名替换恢复前一个）。"""
+        tid = task.id
+        previous = self._tasks.get(tid)
+        self._tasks[tid] = task
+
+        def _dispose():
+            if previous is None:
+                self._tasks.pop(tid, None)
+            else:
+                self._tasks[tid] = previous
+
+        return _dispose
+
+    def get(self, task_id: str, default: Any = None) -> Any:
+        return self._tasks.get(task_id, default)
+
+    def __getitem__(self, task_id: str) -> Any:
+        return self._tasks[task_id]
+
+    def __contains__(self, task_id: str) -> bool:
+        return task_id in self._tasks
+
+    def ids(self) -> list[str]:
+        return sorted(self._tasks)
+
+
+class TasksPlugin(Plugin):
+    """任务注册表插件: 提供 ctx.tasks（聚合键, 业务插件 ctx.get("tasks").register(...)）。
+
+    业务插件声明 inject=["tasks"]（拓扑保证本插件先挂载）,
+    apply 里 ctx.effect(ctx.get("tasks").register(XxxTask()))——unmount 零残留。
+    """
+
+    PUBLIC = True   # 公共插件: 模板提取时随业务插件（inject tasks）一起带走
+    provides = ["tasks"]
+
+    def apply(self, ctx: Context):
+        ctx.register("tasks", TaskRegistry())
+
+
+__all__ = ["AgentTask", "KnowledgeProvider", "Phase", "TaskRegistry",
+           "TasksPlugin", "ToolHandler"]

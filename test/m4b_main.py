@@ -22,6 +22,7 @@ import tempfile
 
 from aic.kernel import Context, Plugin, ServiceNotFound, boot
 from aic.extensions.platform.base import CachePlugin, ConfigPlugin, StoragePlugin, TelemetryPlugin
+from aic.extensions.platform.base.config import ConfigService
 from aic.extensions.platform.base.cache import Cache, RedisCache
 from aic.extensions.platform.base.storage import LocalStorage, MemoryStorage, MinioStorage, ObjectStorage
 from aic.extensions.platform.loops import FakeLoop
@@ -170,10 +171,11 @@ def main() -> int:
     from aic.extensions.platform.loops import OpenAIEnginePlugin
     from aic.extensions.platform.loops import AgentLoop
     eng = Context()
-    eng.register("config", {"llm": {"LLM_MODEL": "test-model",
-                                    "LLM_API_KEY": "test-key",
-                                    "LLM_BASE_URL": "http://127.0.0.1:1",
-                                    "LLM_PROVIDER": ""}})
+    cfg_path = os.path.join(tempfile.mkdtemp(prefix="m4b_cfg_"), "config.ini")
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        f.write("[llm]\nLLM_MODEL=test-model\nLLM_API_KEY=test-key\n"
+                "LLM_BASE_URL=http://127.0.0.1:1\nLLM_PROVIDER=\n")
+    eng.register("config", ConfigService(cfg_path))
     boot(eng, [OpenAIEnginePlugin()])
     loop = eng.get("agentLoop")
     check("OpenAIEnginePlugin 提供 agentLoop", isinstance(loop, AgentLoop))

@@ -122,13 +122,14 @@ AgentLoop        run_conversation(user_message, conversation_history=None, **kw)
 | jobs | `JobsPlugin(impl=None, app_pkg="<应用名>")` | `register_task(name, fn)` / `enqueue(task_name, args=None, queue="default") -> task_id` / `result(task_id, timeout=None)` / `health() -> bool`；Thread/Celery/Failover 队列；**app_pkg 触发任务名协议校验** |
 | db | `DbPlugin(url=None)` | `engine` / `session()`（SQLAlchemy Session）/ `create_all(base)`；模块函数 `database_url() -> str` |
 | sessions | `SessionPlugin(runtime_dir=None)` | `create_session(meta=None) -> Session` / `get(session_id)` / `attach(session_id, meta=None)`（跨进程重建）/ `start_turn(session) -> int`；Session 字段：`session_id` / `dir`（工作区）/ `meta` / `turn`；多机部署 `runtime_dir` 传共享目录 |
-| renderers | `RenderPlugin()` | `register(renderer)` / `get(name)` / `has(name)` / `names()`；渲染器协议：`name` + `render(session, *, merged, outline, version, **kw) -> 输出文件名` |
+| renderers | `RenderPlugin()` | `register(renderer) -> disposer` / `get(name)` / `has(name)` / `names()`；渲染器协议：`name` + `render(session, *, merged, outline, version, **kw) -> 输出文件名` |
+| tasks | `TasksPlugin()` | 聚合键（多业务插件共存）: `ctx.effect(ctx.get("tasks").register(XxxTask()))` 登记（disposer 撤销）/ `get(id)` / `[id]` / `in` / `ids()`；**勿 `ctx.register("tasks", dict)`——同 key 覆盖, 共挂互删** |
 | stream | `StreamPlugin(redis_url=None)` | `subscribe(session_id) -> (实时队列, 事件快照)` / `unsubscribe(session_id, q)` / `publish(session_id, event, data)` / `bridge(event_name)`（业务声明事件→SSE 桥接）；`redis_enabled`（跨进程走 Redis pub/sub） |
 | sandbox | `SandboxPlugin()` | `set_workspace/get_workspace/clear_workspace` / `lock_dir_readonly(path)` / `unlock_dir(path)` / `sanitize_filename(filename, max_length=200)` |
 | extract | `ExtractPlugin(impl=None)` | `extract(content, filename, use_ocr=False, progress_callback=None, **kw) -> str`；模块函数 `extract_document(...)`；LocalExtractor 支持 docx/pdf/MinerU |
 | agentLoop | `FakeLoop(name, replies, delay)`（无配置默认）/ `OpenAIEnginePlugin()`（配好 `LLM_API_KEY` 即真引擎） | AgentLoop 协议（见 §2）；换引擎 = 换提供 agentLoop 的插件（见 §8） |
 
-**事件契约**：事件名由业务自定义；payload 必须携带 `session_id`（stream 依赖它路由推送）。`StreamPlugin` 仅自动桥接 `pipeline/phase`、`chapter/status`、`pipeline/done`——**业务自定义事件要在插件 `apply` 里 `ctx.on` 桥接**（见 §5）。
+**事件契约**：事件先登记再 emit（业务插件 apply 里 `ctx.register_event(name, fields)`; 未登记/字段超集 → RuntimeError）；payload 须携带 `session_id`（stream 依赖它路由推送）。`StreamPlugin` 是通用通道, 不认识业务事件——**桥接由业务声明** `ctx.get("stream").bridge(event)`（见 §5）。
 
 ## 4. 产物通道（extensions.platform.session.artifacts）
 

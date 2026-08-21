@@ -273,17 +273,17 @@ class ReviewService:
             # 3.5 心跳（15s 续期 running/锁 TTL + bump updated_at, 长任务防自愈）
             heartbeat_stop = self._start_heartbeat(session_id, lock_token)
 
-            # 4. 引擎事件 → 审查 SSE（首轮/追问共享）
+            # 4. 引擎事件 → 审查 SSE（首轮/追问共享; payload 字段对齐内核事件注册表）
             def _bridge(event: str, payload: dict) -> None:
                 if event == "agent/tool_progress":
-                    # 子代理/工具进度: 事件名动态（tool.started→tool_started, 对齐原项目）
-                    evt = str(payload.get("event", "tool_progress")).replace(".", "_")
-                    data = {k: v for k, v in payload.items() if k != "event"}
+                    # 子代理/工具进度: 事件名动态（event_type.replace(".","_"), 对齐原项目）
+                    evt = str(payload.get("event_type", "tool_progress")).replace(".", "_")
+                    data = dict(payload.get("kw") or {})
                     data.setdefault("task_status", "running")
                     self._sse(session_id, evt, data)
                 else:
                     self._sse(session_id, _ENGINE_EVENT_MAP.get(event, event),
-                              {"content": payload.get("content", "")})
+                              {"content": payload.get("delta", "")})
 
             disposers = [
                 ctx.on(evt, lambda p, e=evt: _bridge(e, p))
@@ -561,7 +561,7 @@ class ReviewService:
                       knowledge_scope: list, user_message: str, queue: str,
                       conversation_history: list | None = None) -> None:
         """投递审查轮（任务名常量; worker 同名任务 / 线程内联由应用壳注册）。"""
-        from apps.review.tasks import TASK_EXECUTE_REVIEW
+        from extensions.business.review.task import TASK_EXECUTE_REVIEW
         # 排队时间戳（僵尸任务入口超时判据）
         self._cache().set(f"review:queued:{turn_id}", str(time.time()),
                           ttl=STALE_TASK_MAX_AGE + 60)

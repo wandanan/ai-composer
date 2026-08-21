@@ -20,17 +20,19 @@ from extensions.business.writer.task import WriterTask
 class WriterPlugin(Plugin):
     """编写插件：任务 + 流水线 + 知识提供者 + 渲染器 + 反馈闭环 + 批量。"""
 
-    inject = ["sessions", "renderers"]
-    provides = ["tasks", "writerPipeline", "knowledge", "feedback", "batch"]
+    inject = ["sessions", "renderers", "tasks"]
+    provides = ["writerPipeline", "knowledge", "feedback", "batch"]
 
     def apply(self, ctx: Context):
-        ctx.register("tasks", {WriterTask.id: WriterTask()})
+        # 聚合键范式: 任务登记进平台注册表（effect 记账, unmount 撤销）
+        ctx.effect(ctx.get("tasks").register(WriterTask()))
         ctx.register("writerPipeline", WriterPipeline(ctx))
         ctx.register("knowledge", WritingKnowledgeProvider())
         ctx.register("feedback", FeedbackService(ctx))
         ctx.register("batch", BatchRunner(ctx))
         try:
-            ctx.get("renderers").register(DocxRenderer())
+            # 渲染器登记同样 effect 记账（unmount 撤销, 零残留）
+            ctx.effect(ctx.get("renderers").register(DocxRenderer()))
         except ServiceNotFound:
             pass  # 渲染注册表未挂载 → 跳过, md 兜底
 

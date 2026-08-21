@@ -1,7 +1,7 @@
 """kit/render/registry.py — 渲染注册表（ctx.renderers）。"""
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from aic.kernel import Context, Plugin
 
@@ -29,8 +29,19 @@ class RenderRegistry:
     def __init__(self):
         self._renderers: dict[str, ArtifactRenderer] = {}
 
-    def register(self, renderer: ArtifactRenderer) -> None:
+    def register(self, renderer: ArtifactRenderer) -> Callable[[], None]:
+        """注册渲染器, 返回 disposer（插件 ctx.effect 登记 → unmount 撤销;
+        同名替换恢复前一个——与 TaskRegistry 同语义）。"""
+        previous = self._renderers.get(renderer.name)
         self._renderers[renderer.name] = renderer
+
+        def _dispose():
+            if previous is None:
+                self._renderers.pop(renderer.name, None)
+            else:
+                self._renderers[renderer.name] = previous
+
+        return _dispose
 
     def get(self, name: str) -> ArtifactRenderer:
         if name not in self._renderers:

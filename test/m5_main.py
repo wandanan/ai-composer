@@ -91,13 +91,13 @@ def t03_overpromise() -> None:
 def t04_real_plugins() -> None:
     from extensions.business.file_convert import FileConvertPlugin
     from extensions.business.hello import HelloPlugin
-    from extensions.business.todo import TodoPlugin
+    from aic.extensions.platform.agent import TasksPlugin
     from aic.extensions.platform.base import StoragePlugin
 
     ctx = Context()
-    boot(ctx, [StoragePlugin(), HelloPlugin(), TodoPlugin(), FileConvertPlugin()])
+    boot(ctx, [StoragePlugin(), TasksPlugin(), HelloPlugin(), FileConvertPlugin()])
     check("t04 真实插件装配通过",
-          ctx.has("storage") and ctx.has("todos") and ctx.has("tasks")
+          ctx.has("storage") and ctx.has("tasks") and "hello" in ctx.get("tasks")
           and ctx.has("converter") and ctx.has("convertPipeline"))
 
 

@@ -64,26 +64,18 @@ async def health():
 
 APP_SHELL = '''"""apps/{name}/shell.py — 装配（aic.tools.init 生成）。
 
-与 apps/mvp/shell.py 同构: 注册 config + 引擎决策 + boot 插件组合。
+与 apps/mvp/shell.py 同构: 默认 FakeLoop + boot 插件组合（引擎插件挂载即覆盖）。
 """
 from __future__ import annotations
 
-import configparser
 import os
 
 from aic.kernel import (Context, boot, check_bypass_imports,
                     check_shell_content, check_shell_layout)
+from aic.extensions.platform.loops import FakeLoop
 from apps.{name}.profile import PLUGINS
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def load_config() -> dict:
-    parser = configparser.ConfigParser()
-    parser.read(os.path.join(_HERE, "config", "config.local.ini"), encoding="utf-8")
-    llm = {{k: parser.get("llm", k, fallback="") for k in
-           ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER")}}
-    return {{"llm": llm}}
 
 
 def build_shell() -> Context:
@@ -91,19 +83,11 @@ def build_shell() -> Context:
     check_shell_content(_HERE)  # 壳布局契约: 内容检查（AST, 壳内不得有业务代码/接线）
     check_bypass_imports(os.path.dirname(os.path.dirname(_HERE)))  # 旁路 import 契约（机制强制）
     shell = Context()
-    shell.register("config", load_config())
 
-    # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
-    # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
-    if shell.get("config").get("llm", {{}}).get("LLM_API_KEY"):
-        from aic.extensions.platform.loops import OpenAIEnginePlugin
-        plugins = PLUGINS + [OpenAIEnginePlugin()]
-    else:
-        from aic.extensions.platform.loops import FakeLoop
-        shell.register("agentLoop", FakeLoop(name="{name}-fake"))
-        plugins = PLUGINS
-
-    mounts = boot(shell, plugins)
+    # 引擎是部署决策（插件化）: 壳只提供默认 FakeLoop（免 API 成本）;
+    # profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）→ 换引擎零壳改动。
+    shell.register("agentLoop", FakeLoop(name="{name}-fake"))
+    mounts = boot(shell, PLUGINS)
     shell._mounts = mounts  # health 端点展示用
     return shell
 '''
@@ -112,6 +96,9 @@ APP_PROFILE = '''"""apps/{name}/profile.py — 插件组合（aic.tools.init 生
 
 应用壳的组装点: 平台插件 + 你的业务插件。
 """
+import os
+
+from aic.extensions.platform.agent import TasksPlugin
 from aic.extensions.platform.base import CachePlugin, ConfigPlugin, JobsPlugin, StoragePlugin, TelemetryPlugin
 from aic.extensions.platform.render import RenderPlugin
 from aic.extensions.platform.security import SandboxPlugin
@@ -121,7 +108,8 @@ from extensions.business.{name} import {Name}Plugin   # 业务插件（import �
 
 PLUGINS = [
     # ── 基础设施 ──
-    ConfigPlugin(path=__file__.replace("profile.py", "config/config.local.ini")),
+    ConfigPlugin(path=__file__.replace("profile.py",
+                                       f"config/config.{{os.environ.get('APP_ENV', 'local')}}.ini")),
     TelemetryPlugin(),
     StoragePlugin(),
     CachePlugin(),
@@ -131,6 +119,7 @@ PLUGINS = [
     SessionPlugin(),
     RenderPlugin(),
     StreamPlugin(),
+    TasksPlugin(),     # 任务注册表（聚合键: 业务插件登记而非覆盖）
     # ── 业务（③ 声明: 挂载你的业务插件, 取消注释即可）──
     {Name}Plugin(),
 ]
@@ -248,11 +237,13 @@ class {Name}Task:
 class {Name}Plugin(Plugin):
     """③ 声明: 插件接线（依赖 inject + 能力面 provides）。"""
 
-    inject: list[str] = []            # 需要什么（例: ["sessions", "renderers"]）
-    provides: list[str] = ["tasks", "{name}"]   # 提供什么
+    inject: list[str] = ["tasks"]     # 任务注册表（聚合键: 登记而非覆盖）
+    provides: list[str] = ["{name}"]   # 提供什么
 
     def apply(self, ctx: Context):
-        ctx.register("tasks", {{{Name}Task.id: {Name}Task()}})
+        # 聚合键范式: 任务登记进平台注册表（effect 记账, unmount 撤销）,
+        # 不要 ctx.register("tasks", dict)——多插件共挂时 dict 互相覆盖
+        ctx.effect(ctx.get("tasks").register({Name}Task()))
         ctx.register("{name}", lambda: f"{name} ready")
 '''
 

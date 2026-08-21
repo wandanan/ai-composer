@@ -3,6 +3,7 @@
 把 Hermes 文件操作限制在已注册工作区内，且作为**可逆插件**：
 - apply:   注册 ctx.sandbox 服务 + 安装边界补丁（保存原函数引用）
 - unmount: 效果桶还原补丁（恢复原函数），零残留
+- 可重入:  补丁安装按引用计数（多插件/多次挂载只捕获一次原函数, 末次 unmount 才还原）
 
 泛化来源: `app/core/hack_hermes/re_resolve_path_for_task.py`
 新增能力: 可逆性（原实现只 apply 不还原）；工作区经 ctx.sandbox 服务设置
@@ -23,6 +24,7 @@ import logging
 import os
 import re
 import stat
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -141,8 +143,13 @@ def _normalize_for_boundary(path: str) -> str:
     return os.path.normpath(os.path.abspath(path))
 
 
-def _check_boundary(filepath: str, workspace: str, hint: str) -> Path:
-    """解析 filepath（含相对路径展开），越界抛 PermissionError，合法返回 Path。"""
+def _check_boundary(filepath: str, workspace: str, hint: str,
+                    task_id: str = "default") -> Path:
+    """解析 filepath（含相对路径展开），越界抛 PermissionError，合法返回 Path。
+
+    task_id: 相对路径基址取该任务的 live-tracking cwd（hermes 原语义:
+    各任务独立 cwd, 子代理 ≠ "default"）。
+    """
     # bash 格式绝对路径先转 Windows 原生（否则 Path.is_absolute() 误判）
     if os.name == "nt":
         m = re.match(r"^/([a-zA-Z])/(.*)", filepath)
@@ -154,7 +161,7 @@ def _check_boundary(filepath: str, workspace: str, hint: str) -> Path:
         base = None
         try:
             from tools.file_tools import _get_live_tracking_cwd
-            base = _get_live_tracking_cwd("default")
+            base = _get_live_tracking_cwd(task_id)
         except ImportError:
             pass
         base = base or os.environ.get("TERMINAL_CWD", os.getcwd())
@@ -182,7 +189,7 @@ def _check_boundary(filepath: str, workspace: str, hint: str) -> Path:
 def _sandboxed_resolve_path(filepath: str, task_id: str = "default") -> Path:
     """带工作区边界检查的路径解析（替换 tools.file_tools._resolve_path_for_task）。"""
     workspace = _get_workspace()
-    return _check_boundary(filepath, workspace, hint="file")
+    return _check_boundary(filepath, workspace, hint="file", task_id=task_id)
 
 
 def _sandboxed_search(self, pattern: str, path: str = ".", target: str = "content",
@@ -216,10 +223,6 @@ def _sandboxed_search(self, pattern: str, path: str = ".", target: str = "conten
     )
 
 
-# search 补丁闭包引用原函数（模块级, 每次安装时更新）
-_ORIGINAL_SEARCH_REF: list[Callable] = [None]
-
-
 def _get_workspace() -> str:
     """工作区读取：优先 SandboxService 的 ContextVar，回退 TERMINAL_CWD。"""
     ws = _workspace_ctx.get("")
@@ -228,34 +231,67 @@ def _get_workspace() -> str:
     return os.environ.get("TERMINAL_CWD", "")
 
 
+# search 补丁闭包引用原函数（模块级, 首次安装时捕获, 末次还原后清空）
+_ORIGINAL_SEARCH_REF: list[Callable] = [None]
+
+# 补丁安装状态（引用计数: 可重入, 防二次捕获把已补丁函数当原函数 → 自引用递归）
+_PATCH_LOCK = threading.Lock()
+_PATCH_STATE: dict = {"count": 0, "ft_original": None, "search_original": None}
+
+
 def _install_patches() -> list[Callable[[], None]]:
-    """安装补丁，返回还原函数列表（进插件效果桶 → unmount 自动还原）。"""
-    restore: list[Callable[[], None]] = []
+    """安装补丁，返回还原函数列表（进插件效果桶 → unmount 自动还原）。
 
-    try:
-        import tools.file_tools as ft
-    except ImportError:
-        ft = None
-        logger.warning("[sandbox] tools.file_tools 不可用，跳过文件路径补丁")
-    if ft is not None and hasattr(ft, "_resolve_path_for_task"):
-        original = ft._resolve_path_for_task
-        ft._resolve_path_for_task = _sandboxed_resolve_path
-        restore.append(lambda: setattr(ft, "_resolve_path_for_task", original))
-        logger.info("[sandbox] 已安装 _resolve_path_for_task 边界补丁")
+    可重入: 引用计数——重复挂载只计数不重复捕获（否则把 _sandboxed_search
+    当原函数存下, 调用即自引用无限递归）; 末次 unmount 才真正还原。
+    原子性: 先解析全部目标再动手, 目标缺失 = 跳过该补丁（不半路抛错留残）。
+    """
+    with _PATCH_LOCK:
+        if _PATCH_STATE["count"] > 0:
+            _PATCH_STATE["count"] += 1
+            return [_release_patches]
 
-    try:
-        import tools.file_operations as fo
-    except ImportError:
-        fo = None
-        logger.warning("[sandbox] tools.file_operations 不可用，跳过 search 补丁")
-    if fo is not None and hasattr(fo.ShellFileOperations, "search"):
-        original_search = fo.ShellFileOperations.search
-        _ORIGINAL_SEARCH_REF[0] = original_search
-        fo.ShellFileOperations.search = _sandboxed_search
-        restore.append(lambda: setattr(fo.ShellFileOperations, "search", original_search))
-        logger.info("[sandbox] 已安装 ShellFileOperations.search 边界补丁")
+        try:
+            import tools.file_tools as ft
+        except ImportError:
+            ft = None
+            logger.warning("[sandbox] tools.file_tools 不可用，跳过文件路径补丁")
+        try:
+            import tools.file_operations as fo
+        except ImportError:
+            fo = None
+            logger.warning("[sandbox] tools.file_operations 不可用，跳过 search 补丁")
+        fo_cls = getattr(fo, "ShellFileOperations", None) if fo is not None else None
 
-    return restore
+        if ft is not None and hasattr(ft, "_resolve_path_for_task"):
+            _PATCH_STATE["ft_original"] = ft._resolve_path_for_task
+            ft._resolve_path_for_task = _sandboxed_resolve_path
+            logger.info("[sandbox] 已安装 _resolve_path_for_task 边界补丁")
+        if fo_cls is not None and hasattr(fo_cls, "search"):
+            _PATCH_STATE["search_original"] = fo_cls.search
+            _ORIGINAL_SEARCH_REF[0] = fo_cls.search
+            fo_cls.search = _sandboxed_search
+            logger.info("[sandbox] 已安装 ShellFileOperations.search 边界补丁")
+
+        _PATCH_STATE["count"] = 1
+        return [_release_patches]
+
+
+def _release_patches() -> None:
+    """还原补丁（引用计数: 末次 unmount 才还原, 交叠卸载不误伤仍挂载方）。"""
+    with _PATCH_LOCK:
+        _PATCH_STATE["count"] = max(0, _PATCH_STATE["count"] - 1)
+        if _PATCH_STATE["count"] > 0:
+            return
+        if _PATCH_STATE["ft_original"] is not None:
+            import tools.file_tools as ft
+            ft._resolve_path_for_task = _PATCH_STATE["ft_original"]
+            _PATCH_STATE["ft_original"] = None
+        if _PATCH_STATE["search_original"] is not None:
+            import tools.file_operations as fo
+            fo.ShellFileOperations.search = _PATCH_STATE["search_original"]
+            _PATCH_STATE["search_original"] = None
+        _ORIGINAL_SEARCH_REF[0] = None
 
 
 class SandboxPlugin(Plugin):

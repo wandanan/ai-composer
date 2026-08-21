@@ -20,7 +20,7 @@
   任务名协议（jobs.py 守卫）:
    9. 正例: mvp 注册 writer.run_pipeline / writer.revise → 通过 + memoize + 重复注册
   10. 违例: 注册 writer.ghost → 报错 "任务名协议违规"
-  11. 空档位: todo 零注册无异常; 注册任意名 → 报错（worker 侧空注册表）
+  11. 空档位: file_convert 零注册无异常; 注册任意名 → 报错（worker 侧空注册表）
   12. Failover 双注册: 两侧 registry 均含名, 缓存单条
   13. 降级: worker 不可导入 → 跳过校验（不报错）
   14. 冒烟: 4 应用 build_shell 全部成功; review 壳注册 review.execute_review 通过
@@ -87,7 +87,7 @@ def t01_layout_valid() -> None:
 def t02_real_apps() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ok = True
-    for name in ("mvp", "review", "todo", "file_convert"):   # 用户空间应用（平铺根 apps/）
+    for name in ("mvp", "review", "file_convert"):   # 用户空间应用（平铺根 apps/）
         try:
             check_shell_layout(os.path.join(root, "apps", name))
         except RuntimeError as e:
@@ -281,11 +281,11 @@ def t10_violation() -> None:
 
 
 def t11_empty_slot() -> None:
-    ctx = _jobs_ctx("todo")
+    ctx = _jobs_ctx("file_convert")
     jobs = ctx.get("jobs")
     check("t11 空档位应用零注册无异常", True)
     try:
-        jobs.register_task("todo.anything", lambda *a: None)
+        jobs.register_task("file_convert.anything", lambda *a: None)
         check("t11 空档位注册任意名 → 报错（worker 侧空注册表）", False)
     except RuntimeError as e:
         check("t11 空档位注册任意名 → 报错（worker 侧空注册表）",
@@ -316,11 +316,10 @@ def t13_degrade() -> None:
 def t14_smoke_shells() -> None:
     from apps.mvp.shell import build_shell as build_mvp
     from apps.review.shell import build_shell as build_review
-    from apps.todo.shell import build_shell as build_todo
     from apps.file_convert.shell import build_shell as build_fc
 
     for name, fn in (("mvp", build_mvp), ("review", build_review),
-                     ("todo", build_todo), ("file_convert", build_fc)):
+                     ("file_convert", build_fc)):
         r = fn()
         s = r[0] if isinstance(r, tuple) else r
         check(f"t14 {name} build_shell 通过（布局检查 + 守卫装配）",

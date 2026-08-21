@@ -28,6 +28,7 @@ from aic.extensions.platform.loops.hermes import HermesLoop
 from aic.extensions.platform.security.sandbox import SandboxPlugin
 from aic.extensions.platform.session import SessionPlugin
 from aic.extensions.platform.session.artifacts import list_artifacts
+from aic.extensions.platform.agent import TasksPlugin
 from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.pipeline import WriterPipeline
@@ -76,11 +77,12 @@ def main() -> int:
     app = Context()
     fake = FakeLoop(name="fake-m2", replies=FAKE_REPLIES, delay=0.05)  # 模拟耗时使并发可观测
     app.register("agentLoop", fake)
-    mounts = boot(app, [RenderPlugin(), SandboxPlugin(), SessionPlugin(), WriterPlugin()])
+    mounts = boot(app, [RenderPlugin(), SandboxPlugin(), SessionPlugin(),
+               TasksPlugin(), WriterPlugin()])
     order = [m.plugin.__class__.__name__ for m in mounts]
     print(f"\n[1] 装配: {order}")
     check("inject 推导: 沙箱/会话先于 WriterPlugin 挂载",
-          order == ["RenderPlugin", "SandboxPlugin", "SessionPlugin", "WriterPlugin"],
+          order == ["RenderPlugin", "SandboxPlugin", "SessionPlugin", "TasksPlugin", "WriterPlugin"],
           str(order))
 
     sessions = app.get("sessions")

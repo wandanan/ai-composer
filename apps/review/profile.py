@@ -8,6 +8,7 @@
 """
 import os
 
+from aic.extensions.platform.agent import TasksPlugin
 from aic.extensions.platform.base import (
     CachePlugin,
     ConfigPlugin,
@@ -34,7 +35,8 @@ def _cache_plugin():
 
 PLUGINS = [
     # ── 基础设施 ──
-    ConfigPlugin(path=__file__.replace("profile.py", "config/config.local.ini")),
+    ConfigPlugin(path=__file__.replace("profile.py",
+                                       f"config/config.{os.environ.get('APP_ENV', 'local')}.ini")),
     TelemetryPlugin(),
     StoragePlugin(),
     _cache_plugin(),
@@ -44,6 +46,7 @@ PLUGINS = [
     SandboxPlugin(),
     StreamPlugin(),
     ExtractPlugin(),
+    TasksPlugin(),     # 任务注册表（聚合键: 业务插件登记而非覆盖）
     # ── 业务 ──
     StandardPlugin(),   # 共享领域插件（规范检索, review/writer 共用）
     ReviewPlugin(),

@@ -5,10 +5,6 @@
 """
 from __future__ import annotations
 
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 class ReviewPipeline:
     """审查流程：首轮（understand→review→report）+ 追问轮（revise）。"""
@@ -22,10 +18,8 @@ class ReviewPipeline:
         return self.ctx.get("review")
 
     def _phase(self, session_id: str, name: str) -> None:
-        try:
-            self.ctx.emit("pipeline/phase", {"phase": name, "session_id": session_id})
-        except Exception as e:
-            logger.debug(f"[review] phase 广播失败 {name}: {e}")
+        # 事件已在 ReviewPlugin 登记（pipeline/phase）——契约内 emit, 大声失败
+        self.ctx.emit("pipeline/phase", {"phase": name, "session_id": session_id})
 
     def run(self, session_id: str, skill_text: str = "",
             knowledge_scope: list | None = None, user_message: str = "",

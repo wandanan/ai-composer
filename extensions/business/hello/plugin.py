@@ -30,9 +30,11 @@ class HelloTask:
 class HelloPlugin(Plugin):
     """③ 声明: 插件接线（依赖 inject + 能力面 provides）。"""
 
-    inject: list[str] = []            # 需要什么（例: ["sessions", "renderers"]）
-    provides: list[str] = ["tasks", "hello"]   # 提供什么（能力面）
+    inject: list[str] = ["tasks"]     # 任务注册表（聚合键: 登记而非覆盖）
+    provides: list[str] = ["hello"]   # 提供什么（能力面）
 
     def apply(self, ctx: Context):
-        ctx.register("tasks", {HelloTask.id: HelloTask()})
+        # 聚合键范式: 任务登记进平台注册表（effect 记账, unmount 撤销）,
+        # 不再 ctx.register("tasks", dict)——多插件共挂时 dict 互相覆盖
+        ctx.effect(ctx.get("tasks").register(HelloTask()))
         ctx.register("hello", lambda: "hello from plugin")

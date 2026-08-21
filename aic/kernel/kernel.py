@@ -55,6 +55,7 @@ class Context:
 
     def __init__(self, parent: "Context | None" = None):
         self._services: dict[str, Any] = {}
+        self._service_stack: dict[str, list[Any]] = {}  # key -> 注册栈（底→顶, 覆盖可恢复）
         self._listeners: dict[str, dict] = {}   # event -> {mode, handlers[]}
         self._event_registry: dict[str, dict] = dict(EVENT_REGISTRY)  # event -> {payload: set}
         self._effects: list[Disposer] = []      # 平台层效果（非插件挂载时注册的）
@@ -65,15 +66,30 @@ class Context:
     # ── ① 服务协议 ─────────────────────────────────────
 
     def register(self, key: str, impl: Any) -> Disposer:
-        """注册服务。同 key 后注册覆盖先注册；返回 disposer 可手动注销。"""
+        """注册服务。同 key 后注册覆盖先注册；返回 disposer 可手动注销。
+
+        覆盖可恢复: 登记入 per-key 栈——撤销覆盖者时恢复前一个仍存活的实现
+        （壳默认 FakeLoop 被引擎插件覆盖, unmount 引擎后 FakeLoop 回来,
+        而不是 key 消失）。撤销中间层不影响当前实现。
+        """
         self._services[key] = impl
+        self._service_stack.setdefault(key, []).append(impl)
         if self._mount_audit is not None:
             self._mount_audit.append(key)   # 挂载期间记账 → mount 后能力面校验
 
         def _dispose():
-            # 只撤销自己安装的实现：若已被其他插件覆盖则不动
-            if self._services.get(key) is impl:
+            stack = self._service_stack.get(key)
+            if not stack:
+                return
+            try:
+                stack.remove(impl)          # 只撤销自己的登记（按对象同一性最近的）
+            except ValueError:
+                pass
+            if stack:
+                self._services[key] = stack[-1]   # 恢复最近仍存活的实现
+            else:
                 self._services.pop(key, None)
+                self._service_stack.pop(key, None)
 
         self.effect(_dispose)
         return _dispose
@@ -119,9 +135,21 @@ class Context:
         全局生效（一次登记, 处处 emit）。payload_fields 为允许的字段集
         （emit 的 payload 超集 → RuntimeError; 缺字段不报——可选语义）。
         mode 仅文档/查询用（派发模式一致性由 on 首注册锁定管）。
+
+        可逆（进效果桶）: unmount 撤销登记——同名重登记（如两插件声明同一事件）
+        恢复前一个声明, 不残留也不随挂载顺序漂移。
         """
+        previous = self._event_registry.get(name)
         self._event_registry[name] = {
             "payload": set(payload_fields or ()), "mode": mode}
+
+        def _dispose():
+            if previous is None:
+                self._event_registry.pop(name, None)
+            else:
+                self._event_registry[name] = previous   # 恢复前一个声明（反覆盖）
+
+        self.effect(_dispose)
 
     def emit(self, event: str, payload: Any = None) -> Any:
         """按事件声明的模式派发，返回最终 payload（waterfall/serial 可被改写）。

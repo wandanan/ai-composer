@@ -21,15 +21,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import configparser
 import os
 import sys
+import tempfile
 
 # hermes-agent 本地源码路径（正式接入改为 pip 安装后移除本块）
 HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 
 from aic.kernel import Context, EventMode, boot
+from aic.extensions.platform.base.config import ConfigService
 from aic.extensions.platform.loops import FakeLoop
 from aic.extensions.platform.loops.hermes import HermesEnginePlugin, HermesLoop
 from aic.extensions.platform.loops import AgentLoop
 from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.agent import TasksPlugin
 from aic.extensions.platform.render import RenderPlugin
 from extensions.business.writer import WriterPlugin
 from extensions.business.writer.task import OUTLINE_REPLY
@@ -48,14 +51,25 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {mark} {name}" + (f" — {detail}" if detail else ""))
 
 
-def _load_llm_config() -> dict:
+def _load_config(skip_real: bool) -> ConfigService:
     parser = configparser.ConfigParser()
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根
-    parser.read(os.path.join(here, "apps", "mvp", "config", "config.local.ini"), encoding="utf-8")
+    path = os.path.join(here, "apps", "mvp", "config", "config.local.ini")
+    parser.read(path, encoding="utf-8")
     if not parser.has_section("llm"):
         raise SystemExit("config.local.ini 缺少 [llm] 段")
-    keys = ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER")
-    return {k: parser.get("llm", k, fallback="") for k in keys}
+    if not parser.get("llm", "LLM_API_KEY", fallback=""):
+        if skip_real:
+            # 装配校验需要非空 key（引擎插件 apply 大声失败）; 跳过真实调用时填占位
+            parser.set("llm", "LLM_API_KEY", "skip-real-assembly-only")
+            tmp = tempfile.NamedTemporaryFile(
+                "w", suffix=".ini", delete=False, encoding="utf-8")
+            parser.write(tmp)
+            tmp.close()
+            path = tmp.name
+        else:
+            raise SystemExit("config.local.ini 未配 LLM_API_KEY（或加 --skip-real 跳过真实调用）")
+    return ConfigService(path)
 
 
 def main() -> int:
@@ -66,8 +80,9 @@ def main() -> int:
 
     # ── 应用壳: 平台 + 配置 + 引擎插件 + 会话 + writer 插件 ──
     app = Context()
-    app.register("config", {"llm": _load_llm_config()})
-    mounts = boot(app, [RenderPlugin(), HermesEnginePlugin(), SessionPlugin(), WriterPlugin()])
+    app.register("config", _load_config(skip_real))
+    mounts = boot(app, [RenderPlugin(), HermesEnginePlugin(), SessionPlugin(),
+                        TasksPlugin(), WriterPlugin()])
     order = [m.plugin.__class__.__name__ for m in mounts]
     print(f"\n[0] 装配顺序: {order}")
 

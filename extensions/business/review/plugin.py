@@ -6,7 +6,7 @@ provides: tasks(任务) / review(核心服务) / reviewPipeline(流程) / knowle
 """
 from __future__ import annotations
 
-from aic.kernel import Context, Plugin
+from aic.kernel import Context, Plugin, ServiceNotFound
 
 import extensions.business.review.tools  # noqa: F401  — 触发 hermes 工具注册
 
@@ -14,8 +14,8 @@ import extensions.business.review.tools  # noqa: F401  — 触发 hermes 工具�
 class ReviewPlugin(Plugin):
     """审查插件：任务 + 核心服务 + 流程 + 知识 + 定制工具。"""
 
-    inject = ["config", "storage", "jobs", "stream", "cache", "sandbox", "agentLoop", "extract", "db"]
-    provides = ["tasks", "review", "reviewPipeline", "knowledge", "tools"]
+    inject = ["config", "storage", "jobs", "stream", "cache", "sandbox", "agentLoop", "extract", "db", "tasks"]
+    provides = ["review", "reviewPipeline", "knowledge", "tools"]
 
     def apply(self, ctx: Context):
         from extensions.business.review.data import Base as ReviewBase
@@ -32,10 +32,19 @@ class ReviewPlugin(Plugin):
         for restore in install_patches():
             ctx.effect(restore)
 
-        ctx.register("tasks", {ReviewTask.id: ReviewTask()})
+        # 聚合键范式: 任务登记进平台注册表（effect 记账, unmount 撤销）
+        ctx.effect(ctx.get("tasks").register(ReviewTask()))
         ctx.register("review", ReviewService(ctx))
         ctx.register("reviewPipeline", ReviewPipeline(ctx))
         ctx.register("knowledge", ReviewKnowledgeProvider())
         ctx.register("tools", {
             "save_review_report": SaveReviewReportTool(),
         })
+
+        # 事件契约（0.2.1 事件注册表）: 审查阶段事件声明 + SSE 桥接
+        # （pipeline.py 广播 pipeline/phase; StreamPlugin 通道化, 不认识业务事件）
+        ctx.register_event("pipeline/phase", {"session_id", "phase"})
+        try:
+            ctx.get("stream").bridge("pipeline/phase")
+        except ServiceNotFound:
+            pass

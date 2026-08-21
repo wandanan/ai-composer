@@ -1,25 +1,17 @@
 """apps/hello_aic/shell.py — 装配（aic.tools.init 生成）。
 
-与 apps/mvp/shell.py 同构: 注册 config + 引擎决策 + boot 插件组合。
+与 apps/mvp/shell.py 同构: 默认 FakeLoop + boot 插件组合（引擎插件挂载即覆盖）。
 """
 from __future__ import annotations
 
-import configparser
 import os
 
 from aic.kernel import (Context, boot, check_bypass_imports,
                     check_shell_content, check_shell_layout)
+from aic.extensions.platform.loops import FakeLoop
 from aic.apps.hello_aic.profile import PLUGINS
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def load_config() -> dict:
-    parser = configparser.ConfigParser()
-    parser.read(os.path.join(_HERE, "config", "config.local.ini"), encoding="utf-8")
-    llm = {k: parser.get("llm", k, fallback="") for k in
-           ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER")}
-    return {"llm": llm}
 
 
 def build_shell() -> Context:
@@ -28,18 +20,10 @@ def build_shell() -> Context:
     # 框架内应用（aic/apps/hello_aic）: 项目根 = 上三级（用户应用在根 apps/, init 模板是上两级）
     check_bypass_imports(os.path.dirname(os.path.dirname(os.path.dirname(_HERE))))  # 旁路 import 契约（机制强制）
     shell = Context()
-    shell.register("config", load_config())
 
-    # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
-    # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
-    if shell.get("config").get("llm", {}).get("LLM_API_KEY"):
-        from aic.extensions.platform.loops import OpenAIEnginePlugin
-        plugins = PLUGINS + [OpenAIEnginePlugin()]
-    else:
-        from aic.extensions.platform.loops import FakeLoop
-        shell.register("agentLoop", FakeLoop(name="hello_aic-fake"))
-        plugins = PLUGINS
-
-    mounts = boot(shell, plugins)
+    # 引擎是部署决策（插件化）: 壳只提供默认 FakeLoop（免 API 成本）;
+    # profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）→ 换引擎零壳改动。
+    shell.register("agentLoop", FakeLoop(name="hello_aic-fake"))
+    mounts = boot(shell, PLUGINS)
     shell._mounts = mounts  # health 端点展示用
     return shell

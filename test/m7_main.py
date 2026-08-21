@@ -4,16 +4,16 @@
 
 验证项:
   graph 数据层（真实项目）:
-   1. build_graph: 4 应用 / 关键插件 / keys（AnnAssign 支持）/ 边
+   1. build_graph: 3 应用 / 关键插件 / keys（AnnAssign 支持）/ 边
    2. public 标记: ExtractPlugin/DbPlugin/StandardPlugin=True, ReviewPlugin=False
-   3. ai 判定: ReviewPlugin/WriterPlugin=True, TodoPlugin=False
-   4. 孤儿: DemoPlugin/EchoPlugin/HelloPlugin; 动态: HermesEnginePlugin
+   3. ai 判定: ReviewPlugin/WriterPlugin=True, FileConvertPlugin=False
+   4. 孤儿: DemoPlugin/EchoPlugin/HelloPlugin/HermesEnginePlugin/OpenAIEnginePlugin; 动态: 无（壳零引擎逻辑）
    5. 函数包装展开: review 挂载 CachePlugin（_cache_plugin）
   uninstall 影响分析（纯计算, 不删）:
    6. 卸载 review: 专属=[ReviewPlugin], DbPlugin/ExtractPlugin/StandardPlugin 保留,
       删除清单仅 2 项（壳 + review 包）
    7. 同包保护: DbPlugin 与共享插件同包 → 降级保留
-   8. 卸载 todo: 专属=[TodoPlugin]
+   8. 卸载 file_convert: 专属=[FileConvertPlugin]
    9. 插件卸载: StandardPlugin 拒绝（挂载 review）; DemoPlugin 允许（同包闭包）
   promote 分析:
   10. 预演: ReviewPlugin 移动/引用更新清单正确
@@ -58,13 +58,13 @@ def _base_of(path: str) -> str:
 
 def t01_graph_data() -> None:
     g = build_graph()
-    check("t01 应用 4 个（用户空间; hello_aic 在 aic 框架内）",
-          len(g["apps"]) == 4
-          and set(g["apps"]) == {"mvp", "review", "todo", "file_convert"})
+    check("t01 应用 3 个（用户空间; hello_aic 在 aic 框架内）",
+          len(g["apps"]) == 3
+          and set(g["apps"]) == {"mvp", "review", "file_convert"})
     check("t01 插件 ≥ 18", len(g["plugins"]) >= 18)
-    check("t01 keys 含 todos/converter（AnnAssign 支持）",
-          "todos" in g["keys"] and "converter" in g["keys"])
-    check("t01 边 ≥ 80", len(g["edges"]) >= 80)
+    check("t01 keys 含 converter（AnnAssign 支持）",
+          "converter" in g["keys"])
+    check("t01 边 ≥ 77", len(g["edges"]) >= 77)
 
 
 def t02_public_markers() -> None:
@@ -78,18 +78,18 @@ def t03_ai_detection() -> None:
     g = build_graph()
     check("t03 ReviewPlugin ai（inject agentLoop）", g["plugins"]["ReviewPlugin"]["ai"])
     check("t03 WriterPlugin ai（包内 WriterTask）", g["plugins"]["WriterPlugin"]["ai"])
-    check("t03 TodoPlugin 非 ai", not g["plugins"]["TodoPlugin"]["ai"])
+    check("t03 FileConvertPlugin 非 ai", not g["plugins"]["FileConvertPlugin"]["ai"])
 
 
 def t04_orphan_dynamic() -> None:
     g = build_graph()
     orphans = sorted(n for n, i in g["plugins"].items()
                      if not i["apps"] and not i["dynamic"])
-    check("t04 孤儿 = 演示 + hermes 适配器",
-          orphans == ["DemoPlugin", "EchoPlugin", "HelloPlugin", "HermesEnginePlugin"])
+    check("t04 孤儿 = 演示 + 双引擎适配器",
+          orphans == ["DemoPlugin", "EchoPlugin", "HelloPlugin",
+                      "HermesEnginePlugin", "OpenAIEnginePlugin"])
     dyn = sorted(n for n, i in g["plugins"].items() if i["dynamic"])
-    check("t04 动态 = OpenAIEnginePlugin（壳按配置追加真引擎）",
-          dyn == ["OpenAIEnginePlugin"])
+    check("t04 动态 = 无（壳零引擎逻辑, 引擎插件挂载即覆盖）", dyn == [])
 
 
 def t05_factory_expansion() -> None:
@@ -119,11 +119,11 @@ def t07_same_pkg_protection() -> None:
     check("t07 删除清单不含 platform/base", all("base" not in d for d in r["delete"]))
 
 
-def t08_todo_uninstall() -> None:
+def t08_app_uninstall() -> None:
     g = build_graph()
-    r = analyze_app_removal(_ROOT, g, "todo")
-    check("t08 todo 专属 TodoPlugin", r["exclusive_plugins"] == ["TodoPlugin"])
-    check("t08 todo 删除 2 项", len(r["delete"]) == 2)
+    r = analyze_app_removal(_ROOT, g, "file_convert")
+    check("t08 file_convert 专属 FileConvertPlugin", r["exclusive_plugins"] == ["FileConvertPlugin"])
+    check("t08 file_convert 删除 2 项", len(r["delete"]) == 2)
 
 
 def t09_plugin_removal() -> None:
@@ -161,7 +161,7 @@ def t11_promote_framework_guard() -> None:
 def t12_promote_ground_guard() -> None:
     g = build_graph()
     try:
-        promote(_ROOT, g, "TodoPlugin", "apps", dry=True)
+        promote(_ROOT, g, "FileConvertPlugin", "apps", dry=True)
         check("t12 地基目录拒绝", False)
     except SystemExit as e:
         check("t12 地基目录拒绝", "地基" in str(e))
@@ -412,7 +412,7 @@ def t21_import_aic() -> None:
     import aic
     from aic.kernel import Context as KernelContext
     check("t21 import aic 统一入口（版本/Context/boot）",
-          aic.__version__ == "0.2.1.post1"
+          aic.__version__ == "0.2.1.post2"
           and aic.Context is KernelContext
           and callable(aic.boot)
           and callable(aic.check_bypass_imports))
@@ -481,7 +481,7 @@ def main() -> None:
     t05_factory_expansion()
     t06_review_uninstall()
     t07_same_pkg_protection()
-    t08_todo_uninstall()
+    t08_app_uninstall()
     t09_plugin_removal()
     t10_promote_dry_run()
     t11_promote_framework_guard()

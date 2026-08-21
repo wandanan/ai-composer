@@ -66,6 +66,7 @@ class HermesLoop:
         from run_agent import AIAgent  # 引擎内部才 import hermes
 
         ctx = self.ctx
+        session_id = kw.get("session_id", "")
 
         def _emit(event: str, payload: dict) -> None:
             if ctx is not None:
@@ -83,17 +84,18 @@ class HermesLoop:
             quiet_mode=False,
             skip_memory=True,
             skip_context_files=True,
-            # ── hermes 内部事件 → 平台事件广播 ──
-            thinking_callback=lambda text: _emit("agent/thinking", {"content": text}),
-            stream_delta_callback=lambda delta, **_: _emit("llm/stream", {"delta": delta}),
+            # ── hermes 内部事件 → 平台事件广播（payload 对齐内核事件注册表）──
+            thinking_callback=lambda text: _emit("agent/thinking", {"delta": text}),
+            stream_delta_callback=lambda delta, **_: _emit(
+                "llm/stream", {"session_id": session_id, "delta": delta}),
             tool_start_callback=lambda cid, name, args, **_: _emit(
                 "tools/pre-execute", {"call_id": cid, "name": name, "args": args}),
             tool_complete_callback=lambda cid, name, args, result, **_: _emit(
                 "tools/post-execute",
                 {"call_id": cid, "name": name, "result": str(result)[:200]}),
             # 子代理/工具进度（审查场景 SSE: subagent_start/tool_started 等）
-            tool_progress_callback=lambda event_type, **kw: _emit(
-                "agent/tool_progress", {"event": event_type, **kw}),
+            tool_progress_callback=lambda event_type, **tkw: _emit(
+                "agent/tool_progress", {"event_type": event_type, "kw": tkw}),
         )
         try:
             return agent.run_conversation(
@@ -119,11 +121,19 @@ class HermesEnginePlugin(Plugin):
 
     def apply(self, ctx: Context):
         cfg = ctx.get("config")
-        llm = cfg.get("llm", {})
+        conf = {k: cfg.get("llm", k)
+                for k in ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER")}
+        # 装配期大声失败（与 OpenAIEnginePlugin 同构）: 能力面校验禁止条件注册,
+        # 引擎插件必须无条件注册 + apply 校验配置——空 key 运行时才炸违背大声失败
+        missing = [k for k in ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL") if not conf[k]]
+        if missing:
+            raise RuntimeError(
+                f"[hermes] 引擎配置缺失: [llm] {', '.join(missing)}"
+                f"（写 config/config.<APP_ENV>.ini; 暂不用真引擎则从 profile.py 移除本插件）")
         ctx.register("agentLoop", HermesLoop(
             ctx=ctx,
-            model=llm.get("LLM_MODEL", ""),
-            api_key=llm.get("LLM_API_KEY", ""),
-            base_url=llm.get("LLM_BASE_URL", ""),
-            provider=llm.get("LLM_PROVIDER", ""),
+            model=conf["LLM_MODEL"],
+            api_key=conf["LLM_API_KEY"],
+            base_url=conf["LLM_BASE_URL"],
+            provider=conf["LLM_PROVIDER"],
         ))

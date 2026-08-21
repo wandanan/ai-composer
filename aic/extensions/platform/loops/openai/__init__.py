@@ -117,11 +117,19 @@ class OpenAIEnginePlugin(Plugin):
 
     def apply(self, ctx: Context):
         cfg = ctx.get("config")
-        llm = cfg.get("llm", {})
+        conf = {k: cfg.get("llm", k)
+                for k in ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER")}
+        # 装配期大声失败: 能力面校验禁止条件注册（不能"有 key 才挂载"）,
+        # 因此引擎插件必须无条件注册 + apply 校验配置——空 key 运行时才炸违背大声失败
+        missing = [k for k in ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL") if not conf[k]]
+        if missing:
+            raise RuntimeError(
+                f"[openai] 引擎配置缺失: [llm] {', '.join(missing)}"
+                f"（写 config/config.<APP_ENV>.ini; 暂不用真引擎则从 profile.py 移除本插件）")
         ctx.register("agentLoop", OpenAILoop(
             ctx=ctx,
-            model=llm.get("LLM_MODEL", ""),
-            api_key=llm.get("LLM_API_KEY", ""),
-            base_url=llm.get("LLM_BASE_URL", ""),
-            provider=llm.get("LLM_PROVIDER", ""),
+            model=conf["LLM_MODEL"],
+            api_key=conf["LLM_API_KEY"],
+            base_url=conf["LLM_BASE_URL"],
+            provider=conf["LLM_PROVIDER"],
         ))

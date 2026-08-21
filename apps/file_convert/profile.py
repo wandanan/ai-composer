@@ -2,6 +2,8 @@
 
 应用壳的组装点: 平台插件 + 你的业务插件。
 """
+import os
+
 from aic.extensions.platform.base import CachePlugin, ConfigPlugin, JobsPlugin, StoragePlugin, TelemetryPlugin
 from aic.extensions.platform.render import RenderPlugin
 from aic.extensions.platform.security import SandboxPlugin
@@ -11,7 +13,8 @@ from extensions.business.file_convert import FileConvertPlugin
 
 PLUGINS = [
     # ── 基础设施 ──
-    ConfigPlugin(path=__file__.replace("profile.py", "config/config.local.ini")),
+    ConfigPlugin(path=__file__.replace("profile.py",
+                                       f"config/config.{os.environ.get('APP_ENV', 'local')}.ini")),
     TelemetryPlugin(),
     StoragePlugin(),
     CachePlugin(),

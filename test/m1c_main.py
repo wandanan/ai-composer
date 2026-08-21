@@ -15,7 +15,6 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import configparser
 import os
 import sys
 import tempfile
@@ -25,6 +24,7 @@ HERMES_AGENT_SRC = r"D:/standard_workspace/products_dev/upstream/hermes-agent"
 sys.path.insert(0, HERMES_AGENT_SRC)  # biz 改名后无 plugins 遮蔽冲突, 可提前注入
 
 from aic.kernel import Context, ServiceNotFound, boot
+from aic.extensions.platform.base.config import ConfigService
 from aic.extensions.platform.loops.hermes import HermesEnginePlugin
 from aic.extensions.platform.security.sandbox import SandboxPlugin
 
@@ -37,13 +37,9 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {mark} {name}" + (f" — {detail}" if detail else ""))
 
 
-def _load_llm_config() -> dict:
-    parser = configparser.ConfigParser()
+def _load_config() -> ConfigService:
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根
-    parser.read(os.path.join(here, "apps", "mvp", "config", "config.local.ini"),
-                encoding="utf-8")
-    keys = ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "LLM_PROVIDER")
-    return {k: parser.get("llm", k, fallback="") for k in keys}
+    return ConfigService(os.path.join(here, "apps", "mvp", "config", "config.local.ini"))
 
 
 def main() -> int:
@@ -54,7 +50,7 @@ def main() -> int:
     print("=" * 64)
 
     app = Context()
-    app.register("config", {"llm": _load_llm_config()})
+    app.register("config", _load_config())
     [sandbox_mount, engine_mount] = boot(app, [SandboxPlugin(), HermesEnginePlugin()])
 
     print("\n[1] 沙箱插件挂载")

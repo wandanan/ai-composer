@@ -6,7 +6,8 @@
 """
 from __future__ import annotations
 
-TASK_EXECUTE_REVIEW = "review.execute_review"
+# 任务名单一来源在插件侧（能力归插件, 壳只做双侧同名接线）
+from extensions.business.review.task import TASK_EXECUTE_REVIEW  # noqa: F401
 
 QUEUE_REVIEW = "review"
 QUEUE_FOLLOWUP = "followup"

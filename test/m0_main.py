@@ -36,16 +36,18 @@ def main() -> int:
 
     # ── 应用壳动作 1: 初始化平台根上下文 + 平台基础服务 ──
     app = Context()
-    app.register("config", {"mode": "m0", "app": "demo-shell"})   # 平台基础服务
+    from aic.extensions.platform.base.config import ConfigService
+    app.register("config", ConfigService())   # 平台基础服务（统一 ConfigService 形态）
     app.register("greeter", Greeter("平台默认"))                    # 平台默认实现（可被插件覆盖）
 
     # ── 应用壳动作 2: 组合业务插件（故意乱序，验证 boot 推导装配顺序）──
-    mounts = boot(app, [EchoPlugin(), DemoPlugin()])
+    from aic.extensions.platform.agent import TasksPlugin
+    mounts = boot(app, [EchoPlugin(), DemoPlugin(), TasksPlugin()])
 
     print("\n[1] 自动装配 (inject 依赖 → 拓扑排序)")
     order = [m.plugin.__class__.__name__ for m in mounts]
-    check("乱序传入自动推导: [DemoPlugin, EchoPlugin]",
-          order == ["DemoPlugin", "EchoPlugin"], str(order))
+    check("乱序传入自动推导: [TasksPlugin, DemoPlugin, EchoPlugin]",
+          order == ["TasksPlugin", "DemoPlugin", "EchoPlugin"], str(order))
 
     print("\n[2] 服务查找 (协议接入, 不 import 实现)")
     greeter = app.get("greeter")
@@ -106,7 +108,7 @@ def main() -> int:
           "替换实现" in replaced.greet("M0"), str(replaced))
 
     print("\n[6] 自动销毁 (unmount 零残留, 不误伤其他插件)")
-    demo_mount, echo_mount = mounts[0], mounts[1]
+    demo_mount, echo_mount = mounts[1], mounts[2]   # mounts[0] = TasksPlugin（注册表保留）
     app.unmount(demo_mount)
 
     still = app.get("greeter")
@@ -115,12 +117,9 @@ def main() -> int:
     check("unmount DemoPlugin 后: EchoPlugin 的 echo 服务仍在 (不误伤)",
           app.get("echo")("M0").startswith("你好"), app.get("echo")("M0"))
 
-    try:
-        app.get("tasks")
-        tasks_gone = False
-    except ServiceNotFound:
-        tasks_gone = True
-    check("unmount DemoPlugin 后: tasks 服务已撤销 (零残留)", tasks_gone)
+    # tasks 是聚合注册表（TasksPlugin 仍在挂载）: demo 卸载只撤销自己登记的任务条目
+    check("unmount DemoPlugin 后: demo-task 已从注册表撤销 (零残留)",
+          "demo-task" not in app.get("tasks"))
 
     live_slot = app._listeners.get("app/started")  # 验证脚本读取内部状态
     check("unmount DemoPlugin 后: 事件监听器零残留",
@@ -136,12 +135,12 @@ def main() -> int:
 
     replaced_disposer()
     try:
-        app.get("greeter")
-        greeter_gone = False
+        restored = app.get("greeter")
+        greeter_restored = "平台默认" in restored.greet("M0")
     except ServiceNotFound:
-        greeter_gone = True
-    check("撤销替换注册后: greeter 已不存在 (平台默认也被 demo 卸载时带走)",
-          greeter_gone)
+        greeter_restored = False
+    check("撤销替换注册后: greeter 恢复平台默认 (覆盖可恢复, 不再被带走)",
+          greeter_restored)
 
     print("\n" + "=" * 64)
     failed = _PASS.count(False)

@@ -29,6 +29,7 @@ from docx.shared import RGBColor
 from aic.kernel import Context, boot
 from aic.extensions.platform.loops import FakeLoop
 from aic.extensions.platform.loops.hermes import HermesLoop
+from aic.extensions.platform.agent import TasksPlugin
 from aic.extensions.platform.render import ArtifactRenderer, RenderPlugin
 from aic.extensions.platform.session import SessionPlugin
 from aic.extensions.platform.session.artifacts import list_artifacts, read_artifact
@@ -89,11 +90,11 @@ def main() -> int:
     app = Context()
     fake = FakeLoop(name="fake-m3", replies=FAKE_REPLIES)
     app.register("agentLoop", fake)
-    mounts = boot(app, [RenderPlugin(), SessionPlugin(), WriterPlugin()])
+    mounts = boot(app, [RenderPlugin(), SessionPlugin(), TasksPlugin(), WriterPlugin()])
     order = [m.plugin.__class__.__name__ for m in mounts]
     print(f"\n[1] 渲染注册表: {order}")
     check("inject 推导: 渲染/会话先于 WriterPlugin",
-          order == ["RenderPlugin", "SessionPlugin", "WriterPlugin"], str(order))
+          order == ["RenderPlugin", "SessionPlugin", "TasksPlugin", "WriterPlugin"], str(order))
     renderers = app.get("renderers")
     check("ctx.renderers 已注册", renderers is not None)
     docx_renderer = renderers.get("docx")
