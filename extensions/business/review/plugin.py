@@ -14,7 +14,7 @@ import extensions.business.review.tools  # noqa: F401  — 触发 hermes 工具�
 class ReviewPlugin(Plugin):
     """审查插件：任务 + 核心服务 + 流程 + 知识 + 定制工具。"""
 
-    inject = ["config", "storage", "jobs", "stream", "cache", "sandbox", "agentLoop", "extract", "db", "tasks"]
+    inject = ["storage", "jobs", "stream", "cache", "sandbox", "agentLoop", "extract", "db", "tasks"]
     provides = ["review", "reviewPipeline", "knowledge", "tools"]
 
     def apply(self, ctx: Context):

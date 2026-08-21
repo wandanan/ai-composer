@@ -1,8 +1,9 @@
 """biz/writer/plugin.py — 编写业务插件入口（M3）。
 
 业务即插件：本包 = 施工方案编写业务，挂载到 agent-service-kit 平台即构成编写应用。
-- inject ["sessions", "renderers"]: 依赖平台会话/渲染服务（boot 自动排序）
-- provides: tasks / writerPipeline / knowledge
+- inject ["sessions", "tasks"]: 依赖平台会话/任务注册表（boot 自动排序）
+- inject_optional ["renderers", "stream", "agentLoop"]: 可选（renderers 缺席 md 兜底）
+- provides: writerPipeline / knowledge / feedback / batch
 - 注册 docx 渲染器进平台渲染注册表（renderers 未挂载时跳过, md 兜底）
 """
 from __future__ import annotations
@@ -20,7 +21,10 @@ from extensions.business.writer.task import WriterTask
 class WriterPlugin(Plugin):
     """编写插件：任务 + 流水线 + 知识提供者 + 渲染器 + 反馈闭环 + 批量。"""
 
-    inject = ["sessions", "renderers", "tasks"]
+    inject = ["sessions", "tasks"]
+    # 可选依赖（有则拓扑排前, 无则降级）: renderers 缺席 md 兜底;
+    # stream 缺席不桥接; agentLoop 调用时取（壳默认 FakeLoop 总在）
+    inject_optional = ["renderers", "stream", "agentLoop"]
     provides = ["writerPipeline", "knowledge", "feedback", "batch"]
 
     def apply(self, ctx: Context):

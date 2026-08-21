@@ -63,6 +63,7 @@ class FileConvertPlugin(Plugin):
     """⑤ 插件声明: 提供转换能力 + 流程。"""
 
     inject: list[str] = []                      # 需要什么（无需平台服务）
+    inject_optional: list[str] = ["stream"]     # 可选: SSE 桥接（缺席则跳过, 拓扑序仍有保证）
     provides: list[str] = ["converter", "convertPipeline"]   # 提供什么
 
     def apply(self, ctx: Context):

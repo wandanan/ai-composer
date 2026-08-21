@@ -60,11 +60,27 @@ def _scan_profile(app_dir: str) -> tuple[dict[str, str], list[str]]:
 
     PLUGINS 元素若是模块内函数（如 _cache_plugin 按环境切换实现）,
     展开为其 return 的实际插件类。
+    支持形态: 字面列表 / AnnAssign / `PLUGINS = [...] + [...]`（BinOp 合并）。
     """
     tree = ast.parse(_read(os.path.join(app_dir, "profile.py")))
     imports: dict[str, str] = {}
     plugins: list[str] = []
     factories = _function_returns(tree)
+
+    def _collect(value: ast.AST) -> None:
+        """从 PLUGINS 值表达式收集插件调用名（List / BinOp+ 递归）。"""
+        if isinstance(value, ast.List):
+            for elt in value.elts:
+                if isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name):
+                    name = elt.func.id
+                    if name in factories:
+                        plugins.extend(sorted(factories[name]))
+                    else:
+                        plugins.append(name)
+        elif isinstance(value, ast.BinOp) and isinstance(value.op, ast.Add):
+            _collect(value.left)
+            _collect(value.right)
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for a in node.names:
@@ -73,28 +89,34 @@ def _scan_profile(app_dir: str) -> tuple[dict[str, str], list[str]]:
             base = (node.module + ".") if node.module else ""
             for a in node.names:
                 imports[a.asname or a.name] = base + a.name
-        elif isinstance(node, ast.Assign):
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             if not any(isinstance(t, ast.Name) and t.id == "PLUGINS"
-                       for t in node.targets):
+                       for t in targets):
                 continue
-            if not isinstance(node.value, ast.List):
-                continue
-            for elt in node.value.elts:
-                if isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name):
-                    name = elt.func.id
-                    if name in factories:
-                        plugins.extend(sorted(factories[name]))
-                    else:
-                        plugins.append(name)
+            _collect(node.value)
     return imports, plugins
 
 
 def _scan_dynamic(shell_path: str) -> list[str]:
-    """扫描 shell.py 中 `plugins = PLUGINS + [Xxx()]` 的条件追加 → 动态插件类名。"""
+    """扫描 shell.py 的条件动态组合 → 动态插件类名。
+
+    识别形态:
+      ① plugins = PLUGINS + [Xxx()]     条件追加
+      ② plugins += [Xxx()] / plugins.append(Xxx())
+      ③ plugins = [... for p in plugins]  条件覆盖（列表推导含插件调用,
+         如 mvp 的 ConfigPlugin(path=...) 运行时替换）
+    """
     if not os.path.exists(shell_path):
         return []
     tree = ast.parse(_read(shell_path))
     found: list[str] = []
+
+    def _calls_in(node: ast.AST) -> list[str]:
+        return [n.func.id for n in ast.walk(node)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id.endswith("Plugin")]
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
             for t in node.targets:
@@ -105,7 +127,18 @@ def _scan_dynamic(shell_path: str) -> list[str]:
                     for elt in v.right.elts:
                         if isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name):
                             found.append(elt.func.id)
-    return found
+                elif isinstance(v, ast.ListComp):   # ③ 条件覆盖
+                    found.extend(_calls_in(v))
+        elif isinstance(node, ast.AugAssign):       # ② +=
+            if isinstance(node.target, ast.Name) and node.target.id == "plugins":
+                found.extend(_calls_in(node.value))
+        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            call = node.value                     # ② .append()
+            if isinstance(call.func, ast.Attribute) and call.func.attr == "append" \
+                    and isinstance(call.func.value, ast.Name) \
+                    and call.func.value.id in ("plugins", "PLUGINS"):
+                found.extend(_calls_in(call))
+    return sorted(set(found))
 
 
 def _is_plugin_class(node: ast.ClassDef) -> bool:
@@ -135,10 +168,11 @@ def _class_public(node: ast.ClassDef) -> bool:
     return False
 
 
-def _class_lists(node: ast.ClassDef) -> tuple[list[str], list[str]]:
-    """提取类体内 inject/provides 列表字面量（兼容 Assign 与带注解的 AnnAssign）。"""
+def _class_lists(node: ast.ClassDef) -> tuple[list[str], list[str], list[str]]:
+    """提取类体内 inject/provides/inject_optional 列表字面量（兼容 Assign 与 AnnAssign）。"""
     inject: list[str] = []
     provides: list[str] = []
+    optional: list[str] = []
     for item in node.body:
         target = None
         if isinstance(item, ast.Assign) and len(item.targets) == 1 \
@@ -147,15 +181,18 @@ def _class_lists(node: ast.ClassDef) -> tuple[list[str], list[str]]:
         elif isinstance(item, ast.AnnAssign) \
                 and isinstance(item.target, ast.Name):
             target = item.target.id
-        if target not in ("inject", "provides") or not isinstance(item.value, ast.List):
+        if target not in ("inject", "provides", "inject_optional") \
+                or not isinstance(item.value, ast.List):
             continue
         vals = [e.value for e in item.value.elts
                 if isinstance(e, ast.Constant) and isinstance(e.value, str)]
         if target == "inject":
             inject = vals
-        else:
+        elif target == "provides":
             provides = vals
-    return inject, provides
+        else:
+            optional = vals
+    return inject, provides, optional
 
 
 def _scan_plugins(ext_dir: str, pkg_name: str | None = None) -> dict[str, dict]:
@@ -195,18 +232,19 @@ def _scan_plugins(ext_dir: str, pkg_name: str | None = None) -> dict[str, dict]:
     for path, module, tree in entries:
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and _is_plugin_class(node):
-                inject, provides = _class_lists(node)
+                inject, provides, optional = _class_lists(node)
                 methods = _class_methods(node)
                 result[node.name] = {
                     "module": module,
                     "inject": inject,
+                    "inject_optional": optional,
                     "provides": provides,
                     "methods": methods,
                     "public": _class_public(node),
-                    # AI 插件 = 依赖 agentLoop（引擎驱动）或实现 AgentTask 形状
-                    # （build_system_prompt 等四方法, aic.extensions.platform.agent）
-                    # 或所在包含 AgentTask 类（AI 能力常在 task.py, 不在插件类自身）
-                    "ai": "agentLoop" in inject
+                    # AI 插件 = 依赖 agentLoop（引擎驱动, 强制或可选）或实现
+                    # AgentTask 形状（build_system_prompt 等四方法,
+                    # aic.extensions.platform.agent）或所在包含 AgentTask 类
+                    "ai": "agentLoop" in inject or "agentLoop" in optional
                           or "build_system_prompt" in methods
                           or os.path.dirname(path) in agenttask_pkgs,
                 }
@@ -214,6 +252,38 @@ def _scan_plugins(ext_dir: str, pkg_name: str | None = None) -> dict[str, dict]:
 
 
 # ── 图构建 ──────────────────────────────────────────
+
+def _scan_consumers(ext_dir: str) -> dict[str, set[str]]:
+    """扫描插件区每个包内 ctx.get("key") 字面消费 → 包路径 → 消费 key 集。
+
+    用于「消费未声明」咨询: get 的 key 不在 inject/inject_optional/本包 provides
+    之内 → 依赖对 graph/uninstall 不可见（机制不强制, 咨询提示）。
+    """
+    per_pkg: dict[str, set[str]] = {}
+    for root, dirs, files in os.walk(ext_dir):
+        dirs[:] = sorted(d for d in dirs if d not in _IGNORED_PKG)
+        for f in sorted(files):
+            if not f.endswith(".py"):
+                continue
+            path = os.path.join(root, f)
+            try:
+                tree = ast.parse(_read(path))
+            except (OSError, SyntaxError):
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) \
+                        or not isinstance(node.func, ast.Attribute) \
+                        or node.func.attr != "get" or len(node.args) != 1 \
+                        or not isinstance(node.args[0], ast.Constant) \
+                        or not isinstance(node.args[0].value, str):
+                    continue
+                recv = node.func.value
+                is_ctx = (isinstance(recv, ast.Name) and recv.id == "ctx") or \
+                         (isinstance(recv, ast.Attribute) and recv.attr == "ctx")
+                if is_ctx:
+                    per_pkg.setdefault(root, set()).add(node.args[0].value)
+    return per_pkg
+
 
 def build_graph() -> dict:
     """构建仓库级图谱: {apps, plugins, keys, edges}。"""
@@ -223,10 +293,17 @@ def build_graph() -> dict:
     if not os.path.isdir(apps_dir):
         raise SystemExit(f"❌ 当前目录不是 aic 项目（未找到 apps/）: {root}")
     plugins = _scan_plugins(ext_dir)   # 用户空间: 根 extensions（业务 + 项目平台）
+    consumers = _scan_consumers(ext_dir)
     import aic
     aic_platform = os.path.join(os.path.dirname(aic.__file__), "extensions", "platform")
     if os.path.isdir(aic_platform):    # 框架空间: aic/extensions/platform（安装/仓库模式均可达）
-        for k, v in _scan_plugins(aic_platform, "aic.extensions.platform").items():
+        framework = _scan_plugins(aic_platform, "aic.extensions.platform")
+        dupes = sorted(set(plugins) & set(framework))
+        if dupes:   # 同名冲突: 静默覆盖会让工具链分析错对象 → 大声失败
+            raise SystemExit(
+                f"❌ 插件类名冲突（用户空间 vs 框架平台）: {dupes}"
+                f"（同名会导致 graph/promote/uninstall 分析错对象, 请改名）")
+        for k, v in framework.items():
             plugins[k] = v
 
     app_mounts: dict[str, list[str]] = {}   # app → [插件类名]
@@ -248,11 +325,12 @@ def build_graph() -> dict:
     # 度数: 被挂载应用数 + 被依赖插件数（其他插件 inject 了它 provides 的 key）
     for cls, info in plugins.items():
         deps = [other for other, oi in plugins.items()
-                if other != cls and set(info["provides"]) & set(oi["inject"])]
+                if other != cls and set(info["provides"])
+                & (set(oi["inject"]) | set(oi.get("inject_optional", [])))]
         info["ref_count"] = len(info["apps"]) + len(deps)
 
     keys = sorted({k for i in plugins.values()
-                   for k in i["inject"] + i["provides"]})
+                   for k in i["inject"] + i.get("inject_optional", []) + i["provides"]})
 
     edges: list[dict] = []
     # 挂载边只保留"实现存在"的插件（空白项目 init 后平台插件实现可能缺失——
@@ -269,14 +347,36 @@ def build_graph() -> dict:
     for cls, info in plugins.items():
         for k in info["inject"]:
             edges.append({"from": cls, "kind": "inject", "to": k})
+        for k in info.get("inject_optional", []):
+            edges.append({"from": cls, "kind": "inject", "to": k, "optional": True})
         for k in info["provides"]:
             edges.append({"from": cls, "kind": "provides", "to": k})
+
+    # 消费未声明咨询（包级粒度: 同包插件共享生命周期, 包内互消放行）:
+    # 包内 ctx.get 的 key 不在 全包 inject/inject_optional/provides 并集之内
+    from aic.tools.uninstall import _pkg_dir
+    pkg_declared: dict[str, set[str]] = {}
+    pkg_name_of: dict[str, str] = {}
+    for cls, info in plugins.items():
+        pkg = os.path.normpath(_pkg_dir(root, info["module"]))
+        pkg_declared.setdefault(pkg, set()).update(
+            info["inject"] + info.get("inject_optional", []) + info["provides"])
+        pkg_name_of[pkg] = info["module"]
+    advisory: dict[str, list[str]] = {}
+    for pkg, declared in pkg_declared.items():
+        mod = pkg_name_of[pkg]
+        if not mod.startswith("extensions."):   # 只扫用户空间包
+            continue
+        undeclared = sorted(consumers.get(pkg, set()) - declared)
+        if undeclared:
+            advisory[mod] = undeclared
 
     return {
         "apps": sorted(app_mounts),
         "plugins": plugins,
         "keys": keys,
         "edges": edges,
+        "advisory": advisory,
     }
 
 
@@ -622,6 +722,10 @@ def main(argv: list[str] | None = None) -> None:
     with open(out, "w", encoding="utf-8") as f:
         f.write(_build_html(graph))
     print(f"✅ 图谱已生成: {out}（双击打开, 点击插件查看引用/影响）")
+    # 消费未声明咨询（get 了但没声明 inject/inject_optional 的 key——依赖对图谱不可见）
+    for mod, keys in sorted(graph.get("advisory", {}).items()):
+        print(f"  ⚠️ 消费未声明: {mod} ctx.get({keys}) 未在 inject/inject_optional 声明"
+              f"（uninstall/blast_radius 看不见该依赖）")
 
 
 if __name__ == "__main__":

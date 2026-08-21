@@ -37,8 +37,8 @@
 | # | 问题 | 证据 | 状态 |
 |---|---|---|---|
 | 9 | 跨应用队列冲突：mvp 与 review worker 都监听 `review,followup`、共享默认 broker | `apps/mvp/worker.py:62`、`apps/review/worker.py:49`、`apps/mvp/main.py:84,126` | 双应用并行 → 任务被对面 worker 偷取 | ✅ |
-| 10 | LocalStorage 默认 root=mkdtemp（每进程新目录）→ worker 进程读不到 API 写入；与 sessions 稳定共享默认不一致 | `base/storage.py:51-52` vs `session/session_service.py:33-35` | ⬜ |
-| 11 | DbPlugin 默认 `sqlite:///aic.db` 相对路径 → DB 位置随启动 cwd 漂移 | `base/db.py:17-18` | ⬜ |
+| 10 | LocalStorage 默认 root=mkdtemp（每进程新目录）→ worker 进程读不到 API 写入；与 sessions 稳定共享默认不一致 | `base/storage.py:51-52` vs `session/session_service.py:33-35` | ✅ |
+| 11 | DbPlugin 默认 `sqlite:///aic.db` 相对路径 → DB 位置随启动 cwd 漂移 | `base/db.py:17-18` | ✅ |
 | 12 | `apps/mvp/worker.py:60` `-A mvp_app.worker`：0.2.0 改名残留可执行字符串 | 实测 `import mvp_app` → ModuleNotFoundError → `python -m apps.mvp.worker` 直接启动必炸 | ✅ |
 | 13 | review workspace 每会话写进程级 `os.environ[TERMINAL_CWD/HERMES_GIT_BASH_PATH]` → 并发会话互覆 + unmount 残留 | `review/workspace.py:122-123` | ⬜ |
 | 14 | import 即写 hermes 全局注册表（绕 effect 桶）：`review/tools/save_review_report.py:124`、`standard/tool.py:96` 模块级 `_register()`；standard 双实例分叉（hermes 走默认实例、ctx 走构造注入实例） | unmount 不撤销；`aic caps` 枚举即留痕 | ⬜ |
@@ -52,12 +52,12 @@
 | # | 阻碍 | 现状/后果 | 状态 |
 |---|---|---|---|
 | 17 | 能力面校验禁止条件注册（实证「有 key 才注册」→ 装配拒绝） | 合理但推论未文档化：引擎插件必须无条件注册 + apply 校验配置。OpenAI/Hermes 插件目前不校验空配置 → 空 key 装配成功、首对话才炸，违背大声失败 | ✅ |
-| 18 | 无可选依赖概念：inject 全强制 | WriterPlugin inject 含 `renderers` 又 try/except → docstring「未挂载 md 兜底」是谎言；file_convert 可选 stream 消费无拓扑保证、顺序错静默跳过（`writer/plugin.py:23,32-35`、`file_convert/plugin.py:71-75`） | ⬜ |
+| 18 | 无可选依赖概念：inject 全强制 | WriterPlugin inject 含 `renderers` 又 try/except → docstring「未挂载 md 兜底」是谎言；file_convert 可选 stream 消费无拓扑保证、顺序错静默跳过（`writer/plugin.py:23,32-35`、`file_convert/plugin.py:71-75`） | ✅ |
 | 19 | 无聚合键语义：`"tasks"`/`"knowledge"` 同 key 后挂载整体覆盖 | 共挂 review+writer → 一方任务字典消失 → KeyError；renderers 注册表对象（merge 安全）vs tasks dict 覆盖（危险）两范式并存，init 模板把危险范式复制给每个新插件（`init.py:242`） | ✅ |
 | 20 | TYPE_CHECKING import 也被旁路扫描 → 业务插件无法类型标注平台服务，只能 Any | `kernel/imports.py` ast.walk 不区分 | ⬜ |
-| 21 | ctx.get 不校验 inject 声明 → uninstall/promote/blast_radius 信任的 inject 元数据纯属自愿 | writer 消费 `agentLoop` 未声明（`writer/pipeline.py:39` vs `plugin.py:23`） | ⬜ |
-| 22 | profile「组合点自由」vs graph AST 扫描子集矛盾：`PLUGINS` 只认字面列表；`_scan_dynamic` 只认 `plugins = PLUGINS + [X()]` 一种形态 → mvp ConfigPlugin 覆盖、review register_task 块不可见 →「dynamic=[]」假清白；graph 少报挂载时 uninstall 可能误删「看似专属」插件 | `tools/graph.py:57-88,91-107` | ⬜ |
-| 23 | graph 以类名为键：用户/框架空间同名插件 → 框架条目静默覆盖用户条目 → 工具链分析错对象 | `tools/graph.py:230-233` | ⬜ |
+| 21 | ctx.get 不校验 inject 声明 → uninstall/promote/blast_radius 信任的 inject 元数据纯属自愿 | writer 消费 `agentLoop` 未声明（`writer/pipeline.py:39` vs `plugin.py:23`） | ✅ |
+| 22 | profile「组合点自由」vs graph AST 扫描子集矛盾：`PLUGINS` 只认字面列表；`_scan_dynamic` 只认 `plugins = PLUGINS + [X()]` 一种形态 → mvp ConfigPlugin 覆盖、review register_task 块不可见 →「dynamic=[]」假清白；graph 少报挂载时 uninstall 可能误删「看似专属」插件 | `tools/graph.py:57-88,91-107` | ✅ |
+| 23 | graph 以类名为键：用户/框架空间同名插件 → 框架条目静默覆盖用户条目 → 工具链分析错对象 | `tools/graph.py:230-233` | ✅ |
 | 24 | `check_bypass_imports` 不扫 `aic/apps`（hello_aic 漏检）；组合面判定同行混 import 可绕过；`_is_plugin_base` 只认基类名恰为 Plugin | `kernel/imports.py:193`、`kernel/layout.py:128-131` | ⬜ |
 
 ---
@@ -110,4 +110,15 @@
 **回归**: m0/m1/m1b(--skip-real)/m2/m3/m4/m4b/m4c/m5(13)/m6(44)/m7(77) 全绿;
 m2/m3 外部依赖段（hermes provider、test/biz 路径）为既有环境问题, 与本次改动无关。
 
-**下一批**: P2（#18 可选 inject、#21 get-inject 扫描、#22 graph 扫描面、#23 同名冲突、#10/#11 默认路径）、P3（#13-#16、#20、#24、#26-#31）。
+### 2026-08-21 P2（已完成, 回归全绿）
+
+- **#18 内核可选依赖 `inject_optional`**（`kernel/plugin.py`/`kernel.py`）: 有提供者则拓扑排前、缺席不报错（`build_dependency_graph` 参与排序, boot 硬校验只管强制 inject; `direct_dependents`/`blast_radius` 保守计入）。实证: 乱序装配排序正确、缺席不炸、强制依赖仍大声失败。采用: WriterPlugin `inject=["sessions","tasks"]` + `inject_optional=["renderers","stream","agentLoop"]`（renderers「未挂载 md 兜底」从谎言变为机制真相）; FileConvertPlugin `inject_optional=["stream"]`。
+- **#21 消费声明可见化**: writer 消费 agentLoop 补进 `inject_optional`; ReviewPlugin 删掉从未消费的 `inject "config"`（声明漂移）。graph 新增 `_scan_consumers` 咨询: 包级扫描 `ctx.get("key")` 字面消费（单参 + ctx 接收者, 排除 dict.get 误报）, 未声明的 `aic graph` 输出 ⚠️ 咨询——当前仓库零未声明。
+- **#22 graph 扫描面扩展**（`tools/graph.py`）: `_scan_profile` 支持 AnnAssign 与 `PLUGINS = [...] + [...]` BinOp; `_scan_dynamic` 识别 `plugins += [X()]`/`.append(X())`/列表推导条件覆盖——mvp 的 ConfigPlugin worker 覆盖现在诚实显示为动态边（m7 t04 断言同步）。uninstall `verify_remaining` 增加 profile 导入烟测（graph AST 子集漏报挂载导致误删时, 断裂引用大声暴露）。
+- **#23 同名冲突大声失败**（`tools/graph.py`）: 用户空间与框架平台插件类名冲突 → build_graph SystemExit（不再静默覆盖错对象）。
+- **#10 LocalStorage 稳定默认**（`base/storage.py`）: mkdtemp 每进程新目录 → `tempdir/kit_storage` 稳定共享（与 sessions 同构, 跨进程读写不再静默断裂）。
+- **#11 sqlite 路径锚定显形**（`base/db.py`）: 相对 sqlite 路径在 DbService 构造时锚定启动 cwd 为绝对路径并 log 显形（DB 位置不再随启动目录静默漂移）。
+
+**回归**: m0–m7/m1b 全绿; graph 边数 80→83（inject_optional 边）, m7 t04 动态断言更新为 mvp ConfigPlugin。
+
+**下一批**: P3（#13-#16、#20、#24、#26-#31 卫生项）。

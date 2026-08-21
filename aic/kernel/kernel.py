@@ -283,6 +283,7 @@ def build_dependency_graph(plugins: list[Any]) -> dict[Any, list[Any]]:
 
     依赖是声明出来的元数据（inject/provides），一次读入内存成图——
     拓扑装配与撤销影响分析共用这一张图。
+    inject_optional 同样参与排序（有提供者则排后）, 但不构成装配硬约束。
     """
     provided_by: dict[str, list[Any]] = {}
     for plugin in plugins:
@@ -291,9 +292,11 @@ def build_dependency_graph(plugins: list[Any]) -> dict[Any, list[Any]]:
 
     deps: dict[Any, list[Any]] = {}
     for plugin in plugins:
+        keys = list(getattr(plugin, "inject", []) or []) \
+            + list(getattr(plugin, "inject_optional", []) or [])
         deps[plugin] = [
             provider
-            for key in getattr(plugin, "inject", [])
+            for key in keys
             for provider in provided_by.get(key, [])
             if provider is not plugin
         ]
@@ -303,6 +306,8 @@ def build_dependency_graph(plugins: list[Any]) -> dict[Any, list[Any]]:
 def boot(root: Context, plugins: list[Any]) -> list[PluginMount]:
     """拓扑装配：按 inject 依赖自动推导挂载顺序；检测依赖环；校验 inject 契约。
 
+    inject_optional: 有提供者则排在其后（拓扑序保证）, 缺席不报错——
+    可选依赖的降级逻辑在插件 apply 里（try/except ServiceNotFound）。
     返回各插件的 PluginMount（供后续 unmount）。
     """
     deps = build_dependency_graph(plugins)
@@ -345,10 +350,16 @@ def boot(root: Context, plugins: list[Any]) -> list[PluginMount]:
 
 
 def direct_dependents(plugins: list[Any], plugin: Any) -> set[Any]:
-    """直接依赖方：撤销 plugin 直接伤到的插件（它们的 inject 与它的 provides 相交）。"""
+    """直接依赖方：撤销 plugin 直接伤到的插件（它们的 inject 与它的 provides 相交）。
+
+    inject_optional 一并计入（保守分析: 可选提供者被撤, 消费方降级不失效,
+    但影响分析应当看得见）。
+    """
     provided = set(getattr(plugin, "provides", []) or [])
     return {c for c in plugins
-            if c is not plugin and (set(getattr(c, "inject", []) or []) & provided)}
+            if c is not plugin
+            and ((set(getattr(c, "inject", []) or [])
+                  | set(getattr(c, "inject_optional", []) or [])) & provided)}
 
 
 def blast_radius(plugins: list[Any], plugin: Any) -> list[Any]:

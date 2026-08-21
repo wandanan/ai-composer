@@ -50,7 +50,9 @@ class LocalStorage:
     """本地目录对象存储。"""
 
     def __init__(self, root: str | None = None):
-        self.root = root or tempfile.mkdtemp(prefix="kit_storage_")
+        # 默认 = 稳定共享目录（与 sessions 默认同构）: mkdtemp 每进程新目录
+        # 会让 worker 进程读不到 API 进程写入的文件（跨进程静默断裂）
+        self.root = root or os.path.join(tempfile.gettempdir(), "kit_storage")
 
     def put(self, key: str, data: bytes) -> None:
         _validate_key(key)

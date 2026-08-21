@@ -7,7 +7,7 @@
    1. build_graph: 3 应用 / 关键插件 / keys（AnnAssign 支持）/ 边
    2. public 标记: ExtractPlugin/DbPlugin/StandardPlugin=True, ReviewPlugin=False
    3. ai 判定: ReviewPlugin/WriterPlugin=True, FileConvertPlugin=False
-   4. 孤儿: DemoPlugin/EchoPlugin/HelloPlugin/HermesEnginePlugin/OpenAIEnginePlugin; 动态: 无（壳零引擎逻辑）
+   4. 孤儿: DemoPlugin/EchoPlugin/HelloPlugin/HermesEnginePlugin/OpenAIEnginePlugin; 动态: mvp ConfigPlugin（worker 条件覆盖）
    5. 函数包装展开: review 挂载 CachePlugin（_cache_plugin）
   uninstall 影响分析（纯计算, 不删）:
    6. 卸载 review: 专属=[ReviewPlugin], DbPlugin/ExtractPlugin/StandardPlugin 保留,
@@ -89,7 +89,8 @@ def t04_orphan_dynamic() -> None:
           orphans == ["DemoPlugin", "EchoPlugin", "HelloPlugin",
                       "HermesEnginePlugin", "OpenAIEnginePlugin"])
     dyn = sorted(n for n, i in g["plugins"].items() if i["dynamic"])
-    check("t04 动态 = 无（壳零引擎逻辑, 引擎插件挂载即覆盖）", dyn == [])
+    check("t04 动态 = mvp ConfigPlugin（worker 路径条件覆盖, graph 扫描面可见）",
+          dyn == ["ConfigPlugin"])
 
 
 def t05_factory_expansion() -> None:

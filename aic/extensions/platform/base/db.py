@@ -7,12 +7,15 @@ ctx.db: SQLAlchemy 引擎 + 会话工厂 + 建表。
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from aic.kernel import Context, Plugin
+
+logger = logging.getLogger(__name__)
 
 
 def database_url() -> str:
@@ -26,6 +29,12 @@ class DbService:
         url = url or database_url()
         kwargs: dict = {}
         if url.startswith("sqlite"):
+            # 相对 sqlite 路径锚定启动 cwd 并显形——否则 DB 位置随启动目录静默漂移
+            path = url.split("///", 1)[-1]
+            if not os.path.isabs(path):
+                abs_path = os.path.abspath(path)
+                logger.info("[db] sqlite 相对路径已锚定: %s -> %s", path, abs_path)
+                url = f"sqlite:///{abs_path}"
             kwargs["connect_args"] = {"check_same_thread": False}
         self._engine = create_engine(url, **kwargs)
         if url.startswith("sqlite"):

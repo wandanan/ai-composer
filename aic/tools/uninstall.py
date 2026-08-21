@@ -120,9 +120,15 @@ def analyze_plugin_removal(root: str, graph: dict, cls: str) -> dict:
 
 
 def verify_remaining(graph: dict, removed_app: str | None) -> list[str]:
-    """卸载后验证: 剩余应用过壳布局契约（存在性 + 内容 AST 检查）。"""
+    """卸载后验证: 剩余应用过壳布局契约（存在性 + 内容 AST 检查）+ profile 可导入。
+
+    profile 导入烟测: graph 的 AST 扫描是子集（条件追加/推导可能漏报挂载）,
+    误删"看似专属"的插件时布局检查照绿——导入 profile 让断裂的引用大声暴露。
+    """
     from aic.kernel import check_shell_content, check_shell_layout
     root = _root()
+    if root not in sys.path:
+        sys.path.insert(0, root)
     problems: list[str] = []
     for app in graph["apps"]:
         if app == removed_app:
@@ -136,6 +142,11 @@ def verify_remaining(graph: dict, removed_app: str | None) -> list[str]:
                 check(app_dir)
             except RuntimeError as e:
                 problems.append(f"{app}: {e}")
+        try:
+            import importlib
+            importlib.import_module(f"apps.{app}.profile")
+        except Exception as e:  # noqa: BLE001 — 任何导入失败都要报（引用断裂）
+            problems.append(f"{app}: profile 导入失败（可能引用了被删插件）: {e}")
     return problems
 
 
