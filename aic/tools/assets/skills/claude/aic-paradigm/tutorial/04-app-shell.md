@@ -28,11 +28,26 @@ apps/<app>/
 ## profile.py：插件清单
 
 ```python
+import os
+from aic.extensions.platform.agent import TasksPlugin
+from aic.extensions.platform.base import (CachePlugin, ConfigPlugin, JobsPlugin,
+                                          StoragePlugin, TelemetryPlugin)
+from aic.extensions.platform.render import RenderPlugin
+from aic.extensions.platform.security import SandboxPlugin
+from aic.extensions.platform.session import SessionPlugin
+from aic.extensions.platform.stream import StreamPlugin
+from extensions.business.my_app import MyAppPlugin
+
 PLUGINS = [
-    ConfigPlugin(path=...), TelemetryPlugin(), StoragePlugin(),
-    CachePlugin(), JobsPlugin(app_pkg="my_app"),   # app_pkg: 任务名协议（机制强制）
-    SandboxPlugin(), StreamPlugin(), ExtractPlugin(),
-    StandardPlugin(),          # 共享领域插件
+    # ── 基础设施 ──
+    ConfigPlugin(path=__file__.replace("profile.py",
+                                       f"config/config.{os.environ.get('APP_ENV', 'local')}.ini")),
+    TelemetryPlugin(), StoragePlugin(), CachePlugin(),
+    JobsPlugin(app_pkg="my_app"),   # app_pkg: 任务名协议（机制强制）
+    # ── 平台能力 ──
+    SandboxPlugin(), SessionPlugin(), RenderPlugin(), StreamPlugin(),
+    TasksPlugin(),             # 任务注册表（聚合键: AI 插件登记而非 dict 覆盖）
+    # ── 业务 ──
     MyAppPlugin(),             # ← 你的业务插件
 ]
 ```
@@ -43,27 +58,21 @@ PLUGINS = [
 def build_shell() -> Context:
     check_shell_layout(_HERE)    # 壳布局契约: 存在性检查（机制强制）
     check_shell_content(_HERE)   # 壳布局契约: 内容检查（壳内不得有业务代码/接线）
+    check_bypass_imports(os.path.dirname(os.path.dirname(_HERE)))  # 旁路 import 契约
     shell = Context()
-    shell.register("config", load_config())
 
-    # 引擎是部署决策: 配置了 LLM_API_KEY → OpenAI 兼容真引擎开箱即用; 否则 fake（免 API 成本）。
-    # 想固定用其他引擎 → profile.py 挂载引擎插件（提供 "agentLoop" 即覆盖）。
-    if shell.get("config").get("llm", {}).get("LLM_API_KEY"):
-        from aic.extensions.platform.loops import OpenAIEnginePlugin
-        plugins = PLUGINS + [OpenAIEnginePlugin()]
-    else:
-        from aic.extensions.platform.loops import FakeLoop
-        shell.register("agentLoop", FakeLoop(name="my_app-fake"))
-        plugins = PLUGINS
-
-    mounts = boot(shell, plugins)    # 自动装配: 依赖顺序不用管
+    # 引擎是部署决策（插件化）: 壳只提供默认 FakeLoop（免 API 成本）;
+    # profile.py 挂引擎插件（提供 "agentLoop" 即覆盖）→ 换引擎零壳改动。
+    shell.register("agentLoop", FakeLoop(name="my_app-fake"))
+    mounts = boot(shell, PLUGINS)   # 自动装配: 依赖顺序不用管
+    shell._mounts = mounts
     return shell
 ```
 
 要点：
 
-- **引擎是部署决策**——`config [llm]` 配好 `LLM_API_KEY` → 自动用 OpenAI 兼容真引擎（OpenAI/DeepSeek/通义/Kimi…，开箱即用）；没配 → fake 免 API 成本。换其他引擎 = profile.py 挂载对应引擎插件（详见 [08-SDK 参考 §8](08-sdk-reference.md)），业务零改动
-- **boot 自动装配**——按 `inject`/`provides` 拓扑排序，乱序传入也能排对，依赖环直接拒绝
+- **引擎是部署决策（插件化）**——壳只提供默认 `FakeLoop`（免 API 成本）；profile.py 挂引擎插件（提供 `"agentLoop"` 即覆盖）→ 换引擎零壳改动。**壳内不要写"探测 key 决定引擎"的条件逻辑**（新引擎就得改壳源码, 违背插件化）；config 由 profile 的 `ConfigPlugin(path=...)` 提供，壳不注册 config
+- **boot 自动装配**——按 `inject`/`inject_optional`/`provides` 拓扑排序，乱序传入也能排对，依赖环直接拒绝
 
 ## main.py：HTTP 入口
 

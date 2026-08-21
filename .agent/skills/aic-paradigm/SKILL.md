@@ -9,7 +9,7 @@ description: AIComposer 范式开发 Skill——约束、规范、最佳实践�
 
 ```
 组件 = 能力实现（普通类/函数, 不认识内核）
-插件 = 组件 + 插件声明（inject/provides/apply, 内核接入器）
+插件 = 组件 + 插件声明（inject/inject_optional/provides/apply, 内核接入器）
 应用 = 组件组合（内核组织 + 插件接入 + 应用壳声明清单）
 ```
 
@@ -21,7 +21,7 @@ description: AIComposer 范式开发 Skill——约束、规范、最佳实践�
 **纪律核心**：业务逻辑永远在插件里，壳只做组合。
 **跨盒纪律**：消费方永不 import 实现（走 ctx 服务）; 组合面（*Plugin / loops 包 / profile.py
 组合点）、协议面（aic.extensions.platform.agent / .loops 协议包）与声明工具
-（extract、session.artifacts）豁免——旁路 import 装配期报错（kernel/imports.py）。
+（extract、session.artifacts、security.sanitize）豁免——旁路 import 装配期报错（kernel/imports.py）。
 **事件契约（0.2.1）**：事件先登记再 emit——业务插件 apply 里 `ctx.register_event(name, fields)`
 声明（未登记 emit 报错、payload 超集报错）; SSE 桥接由业务声明
 `ctx.get("stream").bridge(event)`（StreamPlugin 是通用通道, 不认识业务事件）。
@@ -82,7 +82,8 @@ c. 调用 .register/.emit/.effect   → 提供/接线动作属插件 apply（.ge
 shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_app.task 注册
 ```
 
-- 任务名常量在 `tasks.py` 单一来源，shell 与 worker 双侧同名
+- 任务名常量单一来源在**能力所有者侧**：插件若自己 enqueue（如 review 服务），
+  名字归插件（如 `review/task.py`），壳 `tasks.py` re-export；壳 enqueue 则留在壳 `tasks.py`。shell 与 worker 双侧同名
 - `JobsPlugin(app_pkg="<应用名>")` 声明所属应用（装配时校验）
 
 ### 4. 插件区（隐式概念）
@@ -100,17 +101,19 @@ shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_a
 ```
 ① 能力   提供什么功能    → 服务类 / AgentTask（AI 驱动时实现四问协议）
 ② 流程   怎么组合        → pipeline.py（单步操作可跳过）
-③ 声明   要什么/给什么    → inject / provides / apply
+③ 声明   要什么/给什么    → inject（强制）/ inject_optional（可选）/ provides / apply
 ```
 
 - **消费纪律**：每次调用时 `ctx.get(key)`，不缓存引用（缓存了替换就失效）
+- **可选依赖**：`inject_optional` 声明"有提供者则排序、缺席不报错"的依赖（apply 里 try/except `ServiceNotFound` 降级）——不声明却消费 = 依赖对 graph/uninstall 不可见
 - **能力面纪律**：`provides` 必须覆盖 `apply` 里注册的全部 key
+- **聚合键纪律**：tasks / renderers 是多插件共存的聚合键——用注册表 `ctx.effect(ctx.get("tasks").register(XxxTask()))` 登记（可撤销、共挂不互删），**勿** `ctx.register("tasks", dict)`（同 key 后挂载覆盖, 共挂互删）
 - **IO 纪律**：能力里不直接写文件/连库——落盘走产物通道（`save_artifact`）或数据通道（`ctx.get("storage")`）
 - **能力阶梯**（写任何能力前先爬, 第一级成立就停）：
   ```
   1. 平台已有服务?    → aic caps / SDK §3: ctx.get(key) 直接消费（storage/cache/jobs/...）
   2. 已有业务插件?    → extensions/business/*: profile.py 挂载
-  3. 声明工具可用?    → UTILITY_MODULES（extract / session.artifacts 纯函数直接 import）
+  3. 声明工具可用?    → UTILITY_MODULES（extract / session.artifacts / security.sanitize 纯函数直接 import）
   4. 部分满足?       → 扩展优先（见下）: 注入换实现 / 包装器 / 覆盖注册 —— 不动轮子本体
   5. 以上都没有（语义不同）→ 才写新插件（组件 + 声明）
   ```
@@ -123,6 +126,12 @@ shell 侧 register_task(name) ⇒ name ∈ apps.<app>.worker 模块内 @celery_a
   改轮子本体 = 影响所有消费者 → 最后手段: blast_radius 先算影响 + 上浮三问
   ```
 - **契约**：输入 = 会话 meta（`create_session({"job": ...})`）；输出 = 产物（文件）或数据（记录）
+
+## 功能特性变化（FEATURES.md）
+
+写代码前先查 **`FEATURES.md`**——按版本记录框架功能特性的**新增/变更/删除**（如
+`inject_optional`、tasks 聚合键、引擎选择插件化等），标「已删除」的旧范式勿再照旧写。
+AI 写代码时把它与下方教程一起参考，避免套用过期写法。
 
 ## 官方教程（Skill 内嵌副本，随 Skill 分发）
 

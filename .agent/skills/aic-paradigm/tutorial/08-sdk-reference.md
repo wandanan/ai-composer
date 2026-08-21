@@ -10,7 +10,7 @@
 
 ```python
 import aic
-aic.__version__                                   # "0.2.0"
+aic.__version__                                   # "0.2.2"
 from aic import Context, boot, Plugin             # 统一入口（与 aic.kernel 等价）
 from aic.extensions.platform.base import StoragePlugin      # 平台插件
 from aic.extensions.platform.loops import OpenAIEnginePlugin  # 引擎
@@ -51,7 +51,8 @@ PARALLEL  扇出: 并发执行
 
 ```python
 class MyPlugin(Plugin):
-    inject: list[str] = ["sessions", "jobs"]   # 需要什么（内核据此自动推导装配顺序）
+    inject: list[str] = ["sessions", "jobs"]   # 强制依赖（缺席装配报错）
+    inject_optional: list[str] = ["stream"]    # 可选依赖（有则排序, 缺席不报错）
     provides: list[str] = ["my"]               # 提供什么（能力面校验依据）
 
     def apply(self, ctx: Context):             # 注册服务/监听/效果（一切自动可逆）
@@ -95,6 +96,18 @@ class MyTask:
 ```
 
 `Phase`: `FIRST = "first"`（首轮）/ `FOLLOWUP = "followup"`（追问轮）
+
+**AI 任务的接线**（inject `tasks` + 登记进聚合注册表, 不 `ctx.register("tasks", dict)`）:
+
+```python
+class MyAppPlugin(Plugin):
+    inject = ["tasks"]                          # 任务注册表（TasksPlugin 提供, 聚合键）
+    provides = ["my_app"]                       # 能力面（不含 tasks）
+
+    def apply(self, ctx):
+        ctx.effect(ctx.get("tasks").register(MyTask()))   # 登记, unmount 可撤销
+        ctx.register("my_app", MyService(ctx))
+```
 
 ### 其他协议
 
@@ -172,10 +185,10 @@ def build_shell() -> Context:
     check_shell_layout(_HERE)     # 壳布局契约: 存在性检查（机制强制）
     check_shell_content(_HERE)    # 壳布局契约: 内容检查（壳内不得有业务代码/接线）
     shell = Context()
-    shell.register("config", load_config())
 
     # 引擎是部署决策: 默认 fake（免 API 成本, 确定性）。
     # 真实引擎 = profile.py 的 PLUGINS 挂载引擎插件（提供 "agentLoop" 即覆盖 fake）。
+    # config 由 profile 的 ConfigPlugin(path=...) 提供, 壳不注册 config。
     shell.register("agentLoop", FakeLoop(name="my_app-fake"))
     plugins = PLUGINS
 
@@ -460,12 +473,16 @@ class MyEnginePlugin(Plugin):                      # 与 OpenAIEnginePlugin 同�
     provides = ["agentLoop"]
 
     def apply(self, ctx: Context):
-        llm = ctx.get("config").get("llm", {})
+        cfg = ctx.get("config")   # ConfigService（双参 get(section, key, default), 非 dict）
+        conf = {k: cfg.get("llm", k) for k in ("LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL")}
+        missing = [k for k in conf if not conf[k]]
+        if missing:   # 装配期大声失败（能力面校验禁止条件注册 → 无条件注册 + 校验配置）
+            raise RuntimeError(f"[engine] 配置缺失: [llm] {missing}")
         ctx.register("agentLoop", MyEngineLoop(
             ctx=ctx,
-            model=llm.get("LLM_MODEL", ""),
-            api_key=llm.get("LLM_API_KEY", ""),
-            base_url=llm.get("LLM_BASE_URL", ""),
+            model=conf["LLM_MODEL"],
+            api_key=conf["LLM_API_KEY"],
+            base_url=conf["LLM_BASE_URL"],
         ))
 ```
 
@@ -477,7 +494,7 @@ class MyEnginePlugin(Plugin):                      # 与 OpenAIEnginePlugin 同�
 **旁路 import 是最后一道结构约束**：业务代码绕过 ctx 直接 import 其他扩展的实现/组件
 （如 `from aic.extensions.platform.base.storage import LocalStorage`）——换实现时它还继续生效，
 契约被悄悄绕过。`kernel/imports.py` 的 `check_bypass_imports` 在每次装配（build_shell）时
-扫描**三区**（根 `apps/` + 根 `extensions/` + 框架 `aic/extensions/`）的跨盒 import，
+扫描**四区**（根 `apps/` + 根 `extensions/` + 框架 `aic/extensions/` + 框架 `aic/apps/`）的跨盒 import，
 违规直接报错（`[kernel]` 前缀，收集式，sorted 确定性）。
 
 ### 三类合法跨盒 import
@@ -498,8 +515,9 @@ class MyEnginePlugin(Plugin):                      # 与 OpenAIEnginePlugin 同�
 
 ```python
 UTILITY_MODULES = (
-    "extensions.platform.extract",            # extract_document / ALLOWED_TYPES 等（纯函数）
-    "extensions.platform.session.artifacts",  # save/list/read/next_draft_version（无状态文件助手）
+    "aic.extensions.platform.extract",            # extract_document / ALLOWED_TYPES 等（纯函数）
+    "aic.extensions.platform.session.artifacts",  # save/list/read/next_draft_version（无状态文件助手）
+    "aic.extensions.platform.security.sanitize",  # sanitize_filename（文件名净化）
 )
 ```
 
@@ -511,7 +529,7 @@ UTILITY_MODULES = (
 
 ### 边界
 
-- review 业务线整体排除扫描（不进发布包，卫生问题随业务线处理）
+- review 精确到 `apps/review/main.py` + `apps/review/tasks.py` 排除（壳 ORM 直连 + 任务名常量 re-export, 遗留架构债——不再整线豁免）
 - extensions→tools 不在检查范围（sandbox 补丁/工具注册是 CLI 层附属，设计上反向）
 - `importlib.import_module(f"apps.{app_pkg}.worker")` 等动态字符串形态不在此检查（运行时内省，任务名协议另管）
 
